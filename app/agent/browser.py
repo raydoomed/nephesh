@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any, Optional
 
@@ -130,4 +131,30 @@ class BrowserAgent(ToolCallAgent):
 
     async def cleanup(self):
         """Clean up browser agent resources by calling parent cleanup."""
-        await super().cleanup()
+        try:
+            # Clean up browser related resources first
+            browser_tool = self.available_tools.get_tool(BrowserUseTool().name)
+            if browser_tool:
+                logger.info(f"🧹 Cleaning up browser resources...")
+                try:
+                    # Add timeout control
+                    await asyncio.wait_for(browser_tool.cleanup(), timeout=10.0)
+                    logger.info(f"✅ Browser resources cleanup completed")
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ Browser resources cleanup timed out")
+                except Exception as e:
+                    logger.error(
+                        f"🚨 Error when cleaning up browser resources: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            logger.error(f"🚨 Error when getting browser tool: {e}", exc_info=True)
+        finally:
+            # Ensure other tools are also cleaned up
+            try:
+                await super().cleanup()
+                logger.info(f"✅ {self.name} agent resources cleanup completed")
+            except Exception as e:
+                logger.error(
+                    f"🚨 Error when cleaning up agent resources: {e}", exc_info=True
+                )

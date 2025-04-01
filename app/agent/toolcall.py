@@ -237,15 +237,27 @@ class ToolCallAgent(ReActAgent):
     async def cleanup(self):
         """Clean up resources used by the agent's tools."""
         logger.info(f"🧹 Cleaning up resources for agent '{self.name}'...")
+        cleanup_tasks = []
+
+        # 收集所有需要清理的工具
         for tool_name, tool_instance in self.available_tools.tool_map.items():
             if hasattr(tool_instance, "cleanup") and asyncio.iscoroutinefunction(
                 tool_instance.cleanup
             ):
-                try:
-                    logger.debug(f"🧼 Cleaning up tool: {tool_name}")
-                    await tool_instance.cleanup()
-                except Exception as e:
-                    logger.error(
-                        f"🚨 Error cleaning up tool '{tool_name}': {e}", exc_info=True
-                    )
+                # 创建清理任务
+                cleanup_tasks.append((tool_name, tool_instance))
+
+        # 并行执行所有清理任务，确保一个工具的失败不影响其他工具
+        for tool_name, tool_instance in cleanup_tasks:
+            try:
+                logger.debug(f"🧼 Cleaning up tool: {tool_name}")
+                await asyncio.wait_for(tool_instance.cleanup(), timeout=10.0)
+                logger.debug(f"✅ Tool '{tool_name}' cleanup completed")
+            except asyncio.TimeoutError:
+                logger.error(f"⏱️ Timeout while cleaning up tool '{tool_name}'")
+            except Exception as e:
+                logger.error(
+                    f"🚨 Error cleaning up tool '{tool_name}': {e}", exc_info=True
+                )
+
         logger.info(f"✨ Cleanup complete for agent '{self.name}'.")

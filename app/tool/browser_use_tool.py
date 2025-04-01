@@ -12,6 +12,7 @@ from pydantic_core.core_schema import ValidationInfo
 
 from app.config import config
 from app.llm import LLM
+from app.logger import logger
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
@@ -564,7 +565,7 @@ Page content:
             await page.wait_for_load_state()
 
             screenshot = await page.screenshot(
-                full_page=True, animations="disabled", type="jpeg", quality=100
+                full_page=False, animations="disabled", type="jpeg", quality=100
             )
 
             screenshot = base64.b64encode(screenshot).decode("utf-8")
@@ -588,6 +589,8 @@ Page content:
                     + viewport_height,
                 },
                 "viewport_height": viewport_height,
+                "screenshot_type": "viewport_only",  # Indicates the screenshot only includes the current visible area
+                "screenshot_note": "Screenshot only shows the currently visible portion of the page. Scroll to see more content if needed.",
             }
 
             return ToolResult(
@@ -599,13 +602,67 @@ Page content:
 
     async def cleanup(self):
         """Clean up browser resources."""
+        logger.info("Starting to clean up browser resources...")
         async with self.lock:
-            if self.context is not None:
-                await self.context.close()
+            try:
+                # Add timeout control to avoid blocking during cleanup
+                if self.context is not None:
+                    logger.info("Closing browser context...")
+                    try:
+                        # Set context closing timeout
+                        await asyncio.wait_for(self.context.close(), timeout=5.0)
+                        logger.info("Browser context closed successfully")
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Closing browser context timed out, force closing"
+                        )
+                    except Exception as e:
+                        logger.error(f"Error when closing browser context: {str(e)}")
+                    finally:
+                        # Clear references regardless
+                        self.context = None
+                        self.dom_service = None
+
+                if self.browser is not None:
+                    logger.info("Closing browser instance...")
+                    try:
+                        # Set browser closing timeout
+                        await asyncio.wait_for(self.browser.close(), timeout=5.0)
+                        logger.info("Browser instance closed successfully")
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Closing browser instance timed out, force closing"
+                        )
+                    except Exception as e:
+                        logger.error(f"Error when closing browser instance: {str(e)}")
+                    finally:
+                        # Clear references regardless
+                        self.browser = None
+
+                # Clean up web search tool resources
+                if hasattr(self.web_search_tool, "cleanup") and callable(
+                    getattr(self.web_search_tool, "cleanup")
+                ):
+                    try:
+                        await asyncio.wait_for(
+                            self.web_search_tool.cleanup(), timeout=3.0
+                        )
+                        logger.info("Web search tool cleanup completed")
+                    except (asyncio.TimeoutError, Exception) as e:
+                        logger.error(
+                            f"Error when cleaning up web search tool: {str(e)}"
+                        )
+
+                logger.info("Browser resources cleanup completed")
+            except Exception as e:
+                logger.error(
+                    f"Error occurred during browser resources cleanup: {str(e)}",
+                    exc_info=True,
+                )
+            finally:
+                # Ensure resources are set to None even if errors occur to avoid repeated cleanup
                 self.context = None
                 self.dom_service = None
-            if self.browser is not None:
-                await self.browser.close()
                 self.browser = None
 
     def __del__(self):

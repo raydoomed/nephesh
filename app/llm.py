@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import tiktoken
 from openai import (
@@ -29,7 +29,6 @@ from app.schema import (
     Message,
     ToolChoice,
 )
-
 
 REASONING_MODELS = ["o1", "o3-mini"]
 MULTIMODAL_MODELS = [
@@ -179,59 +178,51 @@ class TokenCounter:
 
 
 class LLM:
-    _instances: Dict[str, "LLM"] = {}
-
-    def __new__(
-        cls, config_name: str = "default", llm_config: Optional[LLMSettings] = None
-    ):
-        if config_name not in cls._instances:
-            instance = super().__new__(cls)
-            instance.__init__(config_name, llm_config)
-            cls._instances[config_name] = instance
-        return cls._instances[config_name]
+    """LLM client, using the latest configuration each time it is instantiated"""
 
     def __init__(
         self, config_name: str = "default", llm_config: Optional[LLMSettings] = None
     ):
-        if not hasattr(self, "client"):  # Only initialize if not already initialized
-            llm_config = llm_config or config.llm
-            llm_config = llm_config.get(config_name, llm_config["default"])
-            self.model = llm_config.model
-            self.max_tokens = llm_config.max_tokens
-            self.temperature = llm_config.temperature
-            self.api_type = llm_config.api_type
-            self.api_key = llm_config.api_key
-            self.api_version = llm_config.api_version
-            self.base_url = llm_config.base_url
+        # Use the latest configuration each time it is initialized
+        llm_config = llm_config or config.llm
+        llm_config = llm_config.get(config_name, llm_config["default"])
+        self.model = llm_config.model
+        self.max_tokens = llm_config.max_tokens
+        self.temperature = llm_config.temperature
+        self.api_type = llm_config.api_type
+        self.api_key = llm_config.api_key
+        self.api_version = llm_config.api_version
+        self.base_url = llm_config.base_url
+        self.stream = llm_config.stream if hasattr(llm_config, "stream") else False
 
-            # Add token counting related attributes
-            self.total_input_tokens = 0
-            self.total_completion_tokens = 0
-            self.max_input_tokens = (
-                llm_config.max_input_tokens
-                if hasattr(llm_config, "max_input_tokens")
-                else None
+        # Add token counting related attributes
+        self.total_input_tokens = 0
+        self.total_completion_tokens = 0
+        self.max_input_tokens = (
+            llm_config.max_input_tokens
+            if hasattr(llm_config, "max_input_tokens")
+            else None
+        )
+
+        # Initialize tokenizer
+        try:
+            self.tokenizer = tiktoken.encoding_for_model(self.model)
+        except KeyError:
+            # If the model is not in tiktoken's presets, use cl100k_base as default
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+
+        if self.api_type == "azure":
+            self.client = AsyncAzureOpenAI(
+                base_url=self.base_url,
+                api_key=self.api_key,
+                api_version=self.api_version,
             )
+        elif self.api_type == "aws":
+            self.client = BedrockClient()
+        else:
+            self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
-            # Initialize tokenizer
-            try:
-                self.tokenizer = tiktoken.encoding_for_model(self.model)
-            except KeyError:
-                # If the model is not in tiktoken's presets, use cl100k_base as default
-                self.tokenizer = tiktoken.get_encoding("cl100k_base")
-
-            if self.api_type == "azure":
-                self.client = AsyncAzureOpenAI(
-                    base_url=self.base_url,
-                    api_key=self.api_key,
-                    api_version=self.api_version,
-                )
-            elif self.api_type == "aws":
-                self.client = BedrockClient()
-            else:
-                self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-
-            self.token_counter = TokenCounter(self.tokenizer)
+        self.token_counter = TokenCounter(self.tokenizer)
 
     def count_tokens(self, text: str) -> int:
         """Calculate the number of tokens in a text"""
@@ -369,7 +360,7 @@ class LLM:
         self,
         messages: List[Union[dict, Message]],
         system_msgs: Optional[List[Union[dict, Message]]] = None,
-        stream: bool = True,
+        stream: Optional[bool] = None,
         temperature: Optional[float] = None,
     ) -> str:
         """
@@ -378,7 +369,7 @@ class LLM:
         Args:
             messages: List of conversation messages
             system_msgs: Optional system messages to prepend
-            stream (bool): Whether to stream the response
+            stream (bool): Whether to stream the response, defaults to config value
             temperature (float): Sampling temperature for the response
 
         Returns:
@@ -387,9 +378,11 @@ class LLM:
         Raises:
             TokenLimitExceeded: If token limits are exceeded
             ValueError: If messages are invalid or response is empty
-            OpenAIError: If API call fails after retries
-            Exception: For unexpected errors
         """
+        # Use config stream value if not explicitly specified
+        if stream is None:
+            stream = self.stream
+
         try:
             # Check if the model supports images
             supports_images = self.model in MULTIMODAL_MODELS
@@ -544,9 +537,7 @@ class LLM:
             multimodal_content = (
                 [{"type": "text", "text": content}]
                 if isinstance(content, str)
-                else content
-                if isinstance(content, list)
-                else []
+                else content if isinstance(content, list) else []
             )
 
             # Add images to content

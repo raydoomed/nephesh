@@ -1,3 +1,4 @@
+import logging
 import threading
 import tomllib
 from pathlib import Path
@@ -25,6 +26,7 @@ class LLMSettings(BaseModel):
         description="Maximum input tokens to use across all requests (None for unlimited)",
     )
     temperature: float = Field(1.0, description="Sampling temperature")
+    stream: bool = Field(False, description="Whether to stream the response")
     api_type: str = Field(..., description="Azure, Openai, or Ollama")
     api_version: str = Field(..., description="Azure Openai version if AzureOpenai")
 
@@ -118,6 +120,7 @@ class AppConfig(BaseModel):
         None, description="Search configuration"
     )
     mcp_config: Optional[MCPSettings] = Field(None, description="MCP configuration")
+    raw_config: dict = Field(default_factory=dict, description="Raw configuration data")
 
     class Config:
         arbitrary_types_allowed = True
@@ -159,6 +162,23 @@ class Config:
         with config_path.open("rb") as f:
             return tomllib.load(f)
 
+    def reload_config(self):
+        """Reload the configuration file into memory"""
+        logging.info("Reloading the configuration file...")
+        with self._lock:
+            try:
+                # Clear the current configuration
+                self._config = None
+                # Reload the configuration
+                self._load_initial_config()
+                logging.info("Configuration file reloaded successfully")
+                return True
+            except Exception as e:
+                logging.error(
+                    f"Failed to reload the configuration file: {str(e)}", exc_info=True
+                )
+                return False
+
     def _load_initial_config(self):
         raw_config = self._load_config()
         base_llm = raw_config.get("llm", {})
@@ -173,6 +193,7 @@ class Config:
             "max_tokens": base_llm.get("max_tokens", 4096),
             "max_input_tokens": base_llm.get("max_input_tokens"),
             "temperature": base_llm.get("temperature", 1.0),
+            "stream": base_llm.get("stream", False),
             "api_type": base_llm.get("api_type", ""),
             "api_version": base_llm.get("api_version", ""),
         }
@@ -239,6 +260,7 @@ class Config:
             "browser_config": browser_settings,
             "search_config": search_settings,
             "mcp_config": mcp_settings,
+            "raw_config": raw_config,  # save the original config
         }
 
         self._config = AppConfig(**config_dict)
@@ -273,6 +295,11 @@ class Config:
     def root_path(self) -> Path:
         """Get the root path of the application"""
         return PROJECT_ROOT
+
+    @property
+    def server_config(self):
+        """Get the server configuration"""
+        return self._config.raw_config.get("server", {})
 
 
 config = Config()

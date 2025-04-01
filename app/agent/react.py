@@ -8,6 +8,12 @@ from app.llm import LLM
 from app.schema import AgentState, Memory
 
 
+# 定义一个函数用于动态创建LLM实例
+def create_llm_instance():
+    """创建一个新的LLM实例，确保使用最新的配置"""
+    return LLM()
+
+
 class ReActAgent(BaseAgent, ABC):
     name: str
     description: Optional[str] = None
@@ -15,7 +21,7 @@ class ReActAgent(BaseAgent, ABC):
     system_prompt: Optional[str] = None
     next_step_prompt: Optional[str] = None
 
-    llm: Optional[LLM] = Field(default_factory=LLM)
+    llm: Optional[LLM] = Field(default_factory=create_llm_instance)
     memory: Memory = Field(default_factory=Memory)
     state: AgentState = AgentState.IDLE
 

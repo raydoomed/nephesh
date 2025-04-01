@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -132,25 +133,69 @@ class BaseAgent(BaseModel, ABC):
             self.update_memory("user", request)
 
         results: List[str] = []
-        async with self.state_context(AgentState.RUNNING):
-            while (
-                self.current_step < self.max_steps and self.state != AgentState.FINISHED
-            ):
-                self.current_step += 1
-                logger.info(f"Executing step {self.current_step}/{self.max_steps}")
-                step_result = await self.step()
+        try:
+            async with self.state_context(AgentState.RUNNING):
+                while (
+                    self.current_step < self.max_steps
+                    and self.state != AgentState.FINISHED
+                ):
+                    self.current_step += 1
+                    logger.info(f"Executing step {self.current_step}/{self.max_steps}")
 
-                # Check for stuck state
-                if self.is_stuck():
-                    self.handle_stuck_state()
+                    # Check if the state has already changed to FINISHED before executing the step
+                    if self.state == AgentState.FINISHED:
+                        logger.info(
+                            "Agent state has changed to FINISHED, terminating execution early"
+                        )
+                        break
 
-                results.append(f"Step {self.current_step}: {step_result}")
+                    step_result = await self.step()
 
-            if self.current_step >= self.max_steps:
-                self.current_step = 0
-                self.state = AgentState.IDLE
-                results.append(f"Terminated: Reached max steps ({self.max_steps})")
-        await SANDBOX_CLIENT.cleanup()
+                    # Check if the state has changed to FINISHED after step execution
+                    if self.state == AgentState.FINISHED:
+                        logger.info(
+                            "State changed to FINISHED after step execution, terminating subsequent steps"
+                        )
+                        results.append(f"Step {self.current_step}: {step_result}")
+                        break
+
+                    # Check for stuck state
+                    if self.is_stuck():
+                        self.handle_stuck_state()
+
+                    results.append(f"Step {self.current_step}: {step_result}")
+
+                if self.current_step >= self.max_steps:
+                    self.current_step = 0
+                    self.state = AgentState.IDLE
+                    results.append(f"Terminated: Reached max steps ({self.max_steps})")
+        finally:
+            # Ensure resources are cleaned up regardless of how execution ends
+            try:
+                logger.info("Cleaning up SANDBOX_CLIENT resources...")
+                await asyncio.wait_for(SANDBOX_CLIENT.cleanup(), timeout=5.0)
+                logger.info("SANDBOX_CLIENT resources cleanup completed")
+            except asyncio.TimeoutError:
+                logger.warning("SANDBOX_CLIENT resources cleanup timed out")
+            except Exception as e:
+                logger.error(
+                    f"Error when cleaning up SANDBOX_CLIENT resources: {e}",
+                    exc_info=True,
+                )
+
+            # Call agent's cleanup method to clean up all other resources (including browser)
+            try:
+                logger.info("Calling agent specific cleanup...")
+                await asyncio.wait_for(self.cleanup(), timeout=10.0)
+                logger.info("Agent specific cleanup completed")
+            except asyncio.TimeoutError:
+                logger.warning("Agent cleanup timed out")
+            except Exception as e:
+                logger.error(
+                    f"Error when cleaning up agent resources: {e}",
+                    exc_info=True,
+                )
+
         return "\n".join(results) if results else "No steps executed"
 
     @abstractmethod
@@ -184,6 +229,16 @@ class BaseAgent(BaseModel, ABC):
         )
 
         return duplicate_count >= self.duplicate_threshold
+
+    async def cleanup(self):
+        """Base implementation of cleanup method to be overridden by subclasses.
+
+        This method should be overridden by subclasses to clean up specific resources.
+        The base implementation does nothing.
+        """
+        logger.debug(f"Base cleanup called for agent '{self.name}'")
+        # Base implementation does nothing
+        pass
 
     @property
     def messages(self) -> List[Message]:
