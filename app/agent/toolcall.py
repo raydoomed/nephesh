@@ -11,7 +11,6 @@ from app.prompt.toolcall import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import TOOL_CHOICE_TYPE, AgentState, Message, ToolCall, ToolChoice
 from app.tool import CreateChatCompletion, Terminate, ToolCollection
 
-
 TOOL_CALL_REQUIRED = "Tool calls required but none provided"
 
 
@@ -238,16 +237,15 @@ class ToolCallAgent(ReActAgent):
         """Clean up resources used by the agent's tools."""
         logger.info(f"🧹 Cleaning up resources for agent '{self.name}'...")
         cleanup_tasks = []
-
-        # 收集所有需要清理的工具
+        # Collect all tools that need to be cleaned up
         for tool_name, tool_instance in self.available_tools.tool_map.items():
             if hasattr(tool_instance, "cleanup") and asyncio.iscoroutinefunction(
                 tool_instance.cleanup
             ):
-                # 创建清理任务
+                # Create cleanup tasks
                 cleanup_tasks.append((tool_name, tool_instance))
 
-        # 并行执行所有清理任务，确保一个工具的失败不影响其他工具
+        # Execute all cleanup tasks in parallel, ensuring that the failure of one tool does not affect others
         for tool_name, tool_instance in cleanup_tasks:
             try:
                 logger.debug(f"🧼 Cleaning up tool: {tool_name}")
@@ -261,3 +259,10 @@ class ToolCallAgent(ReActAgent):
                 )
 
         logger.info(f"✨ Cleanup complete for agent '{self.name}'.")
+
+    async def run(self, request: Optional[str] = None) -> str:
+        """Run the agent with cleanup when done."""
+        try:
+            return await super().run(request)
+        finally:
+            await self.cleanup()
