@@ -1,550 +1,191 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenManus - AI智能助手</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <!-- Import Axios for HTTP requests -->
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <!-- Import Vue.js -->
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.js"></script>
-    <!-- Import Font Awesome icons -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>OpenManus - Autonomous AI Agent</title>
+    <link rel="stylesheet" href="/static/css/index.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Import Prism for code highlighting -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
-    <!-- Import Google Fonts -->
-    <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-    <!-- Add page favicon -->
-    <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
-    <!-- Add Meta theme color -->
-    <meta name="theme-color" content="#0c1426">
-    <!-- Add error handling script -->
-    <script>
-        // Global error handling
-        window.onerror = function (message, source, lineno, colno, error) {
-            console.error('Global error:', message, 'at', source, lineno, colno);
-            if (!document.getElementById('error-box')) {
-                const errorBox = document.createElement('div');
-                errorBox.id = 'error-box';
-                errorBox.style.position = 'fixed';
-                errorBox.style.bottom = '10px';
-                errorBox.style.left = '10px';
-                errorBox.style.padding = '10px';
-                errorBox.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
-                errorBox.style.color = 'white';
-                errorBox.style.borderRadius = '5px';
-                errorBox.style.zIndex = 9999;
-                errorBox.style.maxWidth = '80%';
-                errorBox.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
-                document.body.appendChild(errorBox);
-            }
-            document.getElementById('error-box').innerHTML =
-                `<strong>Error occurred:</strong> ${message}<br>
-                <button onclick="this.parentNode.style.display='none'" style="margin-top:5px;padding:2px 5px;background:white;color:red;border:none;border-radius:3px;">Close</button>`;
-            return false;
-        };
-    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
 </head>
 
 <body>
-    <!-- Page loading animation -->
-    <div id="page-loader">
-        <div class="loader-content">
-            <div class="spinner">
-                <div class="bounce1"></div>
-                <div class="bounce2"></div>
-                <div class="bounce3"></div>
+    <!-- Top navigation bar -->
+    <div class="top-navbar">
+        <div class="navbar-container">
+            <div class="navbar-left">
+                <div class="company-info">OpenManus</div>
+                <div class="navbar-divider"></div>
+                <a href="#" class="navbar-link">Introduction</a>
+                <a href="#" class="navbar-link">Examples</a>
             </div>
-            <p>System starting...</p>
+            <div class="navbar-right">
+                <a href="#" class="notification-button">
+                    <i class="fas fa-bell"></i>
+                </a>
+                <a href="https://github.com/mannaandpoem/OpenManus" class="github-button" target="_blank"
+                    rel="noopener noreferrer">
+                    <i class="fab fa-github"></i>
+                    <span>GitHub</span>
+                </a>
+            </div>
         </div>
     </div>
 
-    <div id="app">
-        <!-- New navigation bar design -->
-        <nav class="main-nav">
-            <div class="nav-container">
-                <div class="brand">
-                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo.png') }}' : '{{ url_for('static', filename='images/logo_black.png') }}'"
-                        alt="OpenManus Logo" class="logo">
-                    <h1>OpenManus <span class="version-badge">Beta</span></h1>
-                </div>
-
-                <div class="nav-controls">
-                    <!-- Session ID display -->
-                    <div class="session-id-display">
-                        <i class="fas fa-fingerprint"></i>
-                        <span>${sessionId || 'Not connected'}</span>
-                    </div>
-
-                    <!-- Add notification area in navbar -->
-                    <div class="navbar-notification-area" v-if="navbarNotification.show">
-                        <div class="navbar-notification" :class="navbarNotification.type">
-                            <div class="notification-icon">
-                                <i class="fas"
-                                    :class="navbarNotification.type === 'success' ? 'fa-check-circle' :
-                                   navbarNotification.type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle'"></i>
-                            </div>
-                            <div class="notification-content">${navbarNotification.message}</div>
-                        </div>
-                    </div>
-
-                    <!-- Connection status -->
-                    <div class="status-container" :class="connectionStatus">
-                        <span class="status-dot"></span>
-                        <span class="status-text">${statusText}</span>
-                    </div>
-
-                    <button class="theme-toggle" @click="toggleTheme"
-                        :title="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'">
-                        <i class="fas" :class="isDarkTheme ? 'fa-sun' : 'fa-moon'"></i>
-                    </button>
-
-                    <!-- Add configuration button -->
-                    <button class="config-toggle" @click="toggleConfigPanel" :title="'系统配置'">
-                        <i class="fas fa-cog"></i>
-                    </button>
-
-                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank"
-                        title="Visit the GitHub project repository" class="github-nav-link">
-                        <i class="fab fa-github"></i>
-                    </a>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Main workspace -->
-        <div class="workspace">
-            <!-- Sidebar toolbar -->
-            <div class="toolbox">
-                <!-- Welcome panel -->
-                <div class="tool-section system-info">
-                    <div class="tool-header">
-                        <i class="fas fa-info-circle"></i>
-                        <h3>System Information</h3>
-                    </div>
-                    <div class="info-content">
-                        <p>OpenManus is an intelligent agent platform based on large language models, integrating
-                            diverse tool capabilities, supporting complex task execution and automation processes.</p>
-                    </div>
-                </div>
-
-                <div class="tool-section">
-                    <div class="tool-header">
-                        <i class="fas fa-bolt"></i>
-                        <h3>Session Control</h3>
-                    </div>
-                    <div class="tool-buttons">
-                        <button @click="createNewSession" class="primary-btn">
-                            <i class="fas fa-plus"></i>
-                            <span>New Session</span>
-                        </button>
-                        <button @click="terminateSession" :disabled="!isConnected" class="secondary-btn">
-                            <i class="fas"
-                                :class="[isProcessing && !isConnected ? 'fa-spinner fa-spin' : 'fa-stop']"></i>
-                            <span>${isProcessing && !isConnected ? 'Terminating' : 'Terminate'}</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="tool-section">
-                    <div class="tool-header">
-                        <i class="fas fa-tools"></i>
-                        <h3>Tool List</h3>
-                    </div>
-
-                    <div class="tools-tab-header">
-                        <button class="tab-btn" :class="{'active': activeToolTab === 'available'}"
-                            @click="activeToolTab = 'available'">
-                            Available (${availableTools.length})
-                        </button>
-                        <button class="tab-btn" :class="{'active': activeToolTab === 'used'}"
-                            @click="activeToolTab = 'used'">
-                            Used (${usedTools.size})
-                        </button>
-                    </div>
-
-                    <div v-if="activeToolTab === 'available'" class="tools-panel">
-                        <ul class="tools-list" v-if="availableTools.length > 0">
-                            <li v-for="tool in availableTools" :key="tool.name" class="tool-item">
-                                <div class="tool-icon"><i class="fas fa-cog"></i></div>
-                                <div class="tool-info">
-                                    <div class="tool-name">${tool.name}</div>
-                                    <div class="tool-description">${tool.description}</div>
-                                </div>
-                            </li>
-                        </ul>
-                        <p v-else class="no-tools">No tools loaded</p>
-                    </div>
-
-                    <div v-if="activeToolTab === 'used'" class="tools-panel">
-                        <ul class="tools-list" v-if="usedTools.size > 0">
-                            <li v-for="toolName in Array.from(usedTools)" :key="toolName" class="tool-item used">
-                                <div class="tool-icon"><i class="fas fa-check-circle"></i></div>
-                                <div class="tool-info">
-                                    <div class="tool-name">${toolName}</div>
-                                </div>
-                            </li>
-                        </ul>
-                        <p v-else class="no-tools">No tools used in this session</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chat area -->
-            <div class="chat-section">
-                <!-- Current task display -->
-                <div class="current-task" v-if="lastUserMessage">
-                    <div class="task-label">
-                        <i class="fas fa-tasks"></i>
-                        <span>Current Task:</span>
-                    </div>
-                    <div class="task-content">
-                        <span v-html="formatMessage(lastUserMessage.content)"></span>
-                    </div>
-                </div>
-
-                <!-- Message display area - converted to two-column layout -->
-                <div class="messages-container-split">
-                    <!-- Left side - Manus Agent -->
-                    <div class="messages-column agent-messages" ref="agentMessagesContainer">
-                        <div class="column-header">
-                            <i class="fas fa-robot"></i>
-                            <span>Manus Agent</span>
-                        </div>
-
-                        <div class="column-content">
-                            <div v-for="(message, index) in agentMessages" :key="index"
-                                :class="['message', message.role, message.class]">
-                                <div class="message-header">
-                                    <div class="message-role">
-                                        <i class="fas fa-robot"></i>
-                                        <span>Manus</span>
-                                    </div>
-                                    <span class="message-time">${formatTime(message.time)}</span>
-                                </div>
-                                <div class="message-content" v-html="formatMessage(message.content)"></div>
-                            </div>
-
-                            <!-- Agent message loading status -->
-                            <div v-if="isProcessing" class="processing-indicator">
-                                <div class="typing-indicator">
-                                    <span></span><span></span><span></span>
-                                </div>
-                                <p>Manus is thinking...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right side - OpenManus Computer -->
-                    <div class="messages-column tool-messages" ref="toolMessagesContainer">
-                        <div class="column-header">
-                            <i class="fas fa-tools"></i>
-                            <span>OpenManus Computer</span>
-                        </div>
-
-                        <div class="column-content">
-                            <div v-for="(message, index) in toolMessages" :key="index"
-                                :class="['message', message.role, message.class]">
-                                <div class="message-header">
-                                    <div class="message-role">
-                                        <i class="fas fa-tools"></i>
-                                        <span>${message.name || 'Tool Output'}</span>
-                                    </div>
-                                    <span class="message-time">${formatTime(message.time)}</span>
-                                </div>
-
-                                <div class="message-content">
-                                    <!-- Image display -->
-                                    <div v-if="message.base64_image" class="image-container">
-                                        <div class="screenshot-note">
-                                            <i class="fas fa-info-circle"></i> Current visible area screenshot
-                                        </div>
-                                        <img :src="'data:image/png;base64,' + message.base64_image" alt="Screenshot"
-                                            class="message-image" @click="expandImage">
-                                    </div>
-
-                                    <!-- Text content -->
-                                    <div v-if="message.content" v-html="formatMessage(message.content)"></div>
-
-                                    <!-- Tool call display -->
-                                    <div v-if="message.tool_calls && message.tool_calls.length > 0" class="tool-calls">
-                                        <div v-for="(tool, toolIndex) in message.tool_calls" :key="toolIndex"
-                                            class="tool-call">
-                                            <div class="tool-call-header">
-                                                <i class="fas fa-cog"></i>
-                                                <span>${tool.function.name}</span>
-                                            </div>
-                                            <pre
-                                                class="tool-args"><code class="language-json">${formatJson(tool.function.arguments)}</code></pre>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Input area -->
-                <div class="input-area">
-                    <div class="input-container">
-                        <textarea v-model="userInput" @keydown.enter.ctrl="sendMessage"
-                            :disabled="isProcessing || !isConnected" placeholder="输入指令，Ctrl+Enter发送"
-                            ref="userInputArea">
-                        </textarea>
-
-                        <div class="input-actions">
-                            <button class="action-btn" title="上传文件" disabled>
-                                <i class="fas fa-paperclip"></i>
-                            </button>
-                            <button class="send-btn" @click="sendMessage"
-                                :disabled="isProcessing || !isConnected || !userInput.trim()">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <!-- Background effect elements -->
+    <div class="cyber-background">
+        <div class="grid-overlay"></div>
+        <div class="glow-circle"></div>
+        <div class="tech-circles">
+            <div class="tech-circle" style="--scale:1.0; --opacity:0.15; --speed:40s;"></div>
+            <div class="tech-circle" style="--scale:1.4; --opacity:0.1; --speed:50s;"></div>
+            <div class="tech-circle" style="--scale:0.8; --opacity:0.2; --speed:35s;"></div>
         </div>
-
-        <!-- Configuration panel -->
-        <div class="config-panel" :class="{ 'active': showConfigPanel }">
-            <div class="config-panel-header">
-                <h2><i class="fas fa-cog"></i> System Configuration</h2>
-                <button @click="toggleConfigPanel" class="close-btn">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-
-            <div class="config-panel-content">
-                <div class="config-tabs">
-                    <button v-for="(section, key) in configSections" :key="key"
-                        :class="['config-tab', {active: currentConfigTab === key}]" @click="currentConfigTab = key">
-                        <i :class="['fas', section.icon]"></i>
-                        <span>${section.name}</span>
-                    </button>
-                </div>
-
-                <div class="config-tab-content">
-                    <!-- LLM Configuration -->
-                    <div v-if="currentConfigTab === 'llm'" class="config-section">
-                        <h3>LLM Configuration</h3>
-                        <div class="form-group">
-                            <label for="llm-model">Model Name</label>
-                            <input type="text" id="llm-model" v-model="config.llm.model">
-                        </div>
-                        <div class="form-group">
-                            <label for="llm-base-url">API Base URL</label>
-                            <input type="text" id="llm-base-url" v-model="config.llm.base_url">
-                        </div>
-                        <div class="form-group">
-                            <label for="llm-api-key">API Key</label>
-                            <input type="password" id="llm-api-key" v-model="config.llm.api_key">
-                        </div>
-                        <div class="form-group">
-                            <label for="llm-max-tokens">Max Tokens</label>
-                            <input type="number" id="llm-max-tokens" v-model.number="config.llm.max_tokens">
-                        </div>
-                        <div class="form-group">
-                            <label for="llm-temperature">Temperature</label>
-                            <input type="number" id="llm-temperature" v-model.number="config.llm.temperature" step="0.1"
-                                min="0" max="2">
-                        </div>
-                        <div class="form-group">
-                            <label for="llm-stream">Stream Response</label>
-                            <input type="checkbox" id="llm-stream" v-model="config.llm.stream">
-                        </div>
-
-                        <!-- Vision model configuration -->
-                        <h3>Vision Model Configuration</h3>
-                        <div class="form-group">
-                            <label for="vision-model">Vision Model Name</label>
-                            <input type="text" id="vision-model" v-model="config.llm.vision.model">
-                        </div>
-                        <div class="form-group">
-                            <label for="vision-base-url">Vision API Base URL</label>
-                            <input type="text" id="vision-base-url" v-model="config.llm.vision.base_url">
-                        </div>
-                        <div class="form-group">
-                            <label for="vision-api-key">Vision API Key</label>
-                            <input type="password" id="vision-api-key" v-model="config.llm.vision.api_key">
-                        </div>
-                        <div class="form-group">
-                            <label for="vision-max-tokens">Vision Max Tokens</label>
-                            <input type="number" id="vision-max-tokens" v-model.number="config.llm.vision.max_tokens">
-                        </div>
-                        <div class="form-group">
-                            <label for="vision-temperature">Vision Temperature</label>
-                            <input type="number" id="vision-temperature" v-model.number="config.llm.vision.temperature"
-                                step="0.1" min="0" max="2">
-                        </div>
-                    </div>
-
-                    <!-- Browser configuration -->
-                    <div v-if="currentConfigTab === 'browser'" class="config-section">
-                        <h3>Browser Configuration</h3>
-                        <div class="form-group">
-                            <label for="browser-headless">Headless Mode</label>
-                            <input type="checkbox" id="browser-headless" v-model="config.browser.headless">
-                        </div>
-                        <div class="form-group">
-                            <label for="browser-disable-security">Disable Security Features</label>
-                            <input type="checkbox" id="browser-disable-security"
-                                v-model="config.browser.disable_security">
-                        </div>
-                        <!-- Proxy configuration -->
-                        <h4>Proxy Configuration</h4>
-                        <div class="form-group">
-                            <label for="proxy-server">Proxy Server</label>
-                            <input type="text" id="proxy-server" v-model="proxyServerConfig">
-                        </div>
-                        <div class="form-group">
-                            <label for="proxy-username">Username</label>
-                            <input type="text" id="proxy-username" v-model="proxyUsernameConfig">
-                        </div>
-                        <div class="form-group">
-                            <label for="proxy-password">Password</label>
-                            <input type="password" id="proxy-password" v-model="proxyPasswordConfig">
-                        </div>
-                    </div>
-
-                    <!-- Search configuration -->
-                    <div v-if="currentConfigTab === 'search'" class="config-section">
-                        <h3>Search Configuration</h3>
-                        <div class="form-group">
-                            <label for="search-engine">Search Engine</label>
-                            <select id="search-engine" v-model="config.search.engine">
-                                <option value="Google">Google</option>
-                                <option value="Baidu">Baidu</option>
-                                <option value="DuckDuckGo">DuckDuckGo</option>
-                                <option value="Bing">Bing</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="search-retry-delay">Retry Delay (seconds)</label>
-                            <input type="number" id="search-retry-delay" v-model.number="config.search.retry_delay">
-                        </div>
-                        <div class="form-group">
-                            <label for="search-max-retries">Max Retries</label>
-                            <input type="number" id="search-max-retries" v-model.number="config.search.max_retries">
-                        </div>
-                    </div>
-
-                    <!-- Sandbox configuration -->
-                    <div v-if="currentConfigTab === 'sandbox'" class="config-section">
-                        <h3>Sandbox Configuration</h3>
-                        <div class="form-group">
-                            <label for="sandbox-use-sandbox">Enable Sandbox</label>
-                            <input type="checkbox" id="sandbox-use-sandbox" v-model="config.sandbox.use_sandbox">
-                        </div>
-                        <div class="form-group">
-                            <label for="sandbox-image">Image</label>
-                            <input type="text" id="sandbox-image" v-model="config.sandbox.image">
-                        </div>
-                        <div class="form-group">
-                            <label for="sandbox-memory-limit">Memory Limit</label>
-                            <input type="text" id="sandbox-memory-limit" v-model="config.sandbox.memory_limit">
-                        </div>
-                        <div class="form-group">
-                            <label for="sandbox-cpu-limit">CPU Limit</label>
-                            <input type="number" id="sandbox-cpu-limit" v-model.number="config.sandbox.cpu_limit"
-                                step="0.1">
-                        </div>
-                        <div class="form-group">
-                            <label for="sandbox-timeout">Timeout (seconds)</label>
-                            <input type="number" id="sandbox-timeout" v-model.number="config.sandbox.timeout">
-                        </div>
-                        <div class="form-group">
-                            <label for="sandbox-network-enabled">Enable Network</label>
-                            <input type="checkbox" id="sandbox-network-enabled"
-                                v-model="config.sandbox.network_enabled">
-                        </div>
-                    </div>
-
-                    <!-- Server configuration -->
-                    <div v-if="currentConfigTab === 'server'" class="config-section">
-                        <h3>Server Configuration</h3>
-                        <div class="form-group">
-                            <label for="server-host">Host Address</label>
-                            <input type="text" id="server-host" v-model="config.server.host">
-                        </div>
-                        <div class="form-group">
-                            <label for="server-port">Port Number</label>
-                            <input type="number" id="server-port" v-model.number="config.server.port">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="config-actions">
-                    <button @click="saveConfig" class="save-btn primary-btn">
-                        <i class="fas fa-save"></i> Save Configuration
-                    </button>
-                    <button @click="resetConfig" class="reset-btn secondary-btn">
-                        <i class="fas fa-undo"></i> Reset
-                    </button>
-                </div>
-            </div>
+        <div class="light-rays"></div>
+        <div class="stars-container">
+            <!-- Colorful stars will be dynamically generated by JS -->
         </div>
-
-        <!-- Image preview modal -->
-        <div class="image-modal" v-if="showImageModal" @click="closeModal">
-            <div class="image-modal-content">
-                <img :src="modalImage" alt="Full size image">
-            </div>
+        <div class="color-waves-container">
+            <div class="color-wave" style="--color:rgba(0, 255, 204, 0.15); --opacity:0.05; --duration:60s;"></div>
+            <div class="color-wave" style="--color:rgba(170, 0, 255, 0.15); --opacity:0.04; --duration:80s;"></div>
+            <div class="color-wave" style="--color:rgba(0, 128, 255, 0.15); --opacity:0.03; --duration:100s;"></div>
         </div>
-
-        <!-- Central notification card -->
-        <transition name="fade">
-            <div class="center-notification" v-if="centerNotification.show" :class="centerNotification.type">
-                <div class="center-notification-content">
-                    <div class="notification-icon">
-                        <i class="fas" :class="centerNotification.type === 'success' ? 'fa-check-circle' :
-                           centerNotification.type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle'"></i>
-                    </div>
-                    <div class="notification-message">${centerNotification.message}</div>
-                </div>
-                <div class="notification-actions" v-if="centerNotification.showAction">
-                    <button v-if="centerNotification.actionType === 'restart'" class="primary-btn"
-                        @click="restartServer">
-                        Restart Server
-                    </button>
-                    <button v-if="centerNotification.actionType === 'newSession'" class="primary-btn"
-                        @click="createNewSession">
-                        New Session
-                    </button>
-                    <button class="secondary-btn" @click="closeCenterNotification">
-                        I know
-                    </button>
-                </div>
-            </div>
-        </transition>
-
-        <!-- Add floating control buttons -->
+        <!-- Dynamic light spots -->
+        <div class="light-spot"
+            style="--color:rgba(0, 255, 204, 0.15); --opacity:0.2; --duration:80s; --delay:0s; --start-x:-30%; --start-y:-30%; --end-x:30%; --end-y:30%;">
+        </div>
+        <div class="light-spot"
+            style="--color:rgba(170, 0, 255, 0.1); --opacity:0.15; --duration:100s; --delay:20s; --start-x:30%; --start-y:-30%; --end-x:-30%; --end-y:30%;">
+        </div>
+        <div class="light-spot"
+            style="--color:rgba(255, 0, 170, 0.1); --opacity:0.1; --duration:90s; --delay:40s; --start-x:0%; --start-y:40%; --end-x:0%; --end-y:-40%;">
+        </div>
+        <canvas id="matrix-canvas"></canvas>
     </div>
 
-    <!-- Prism.js for code highlighting -->
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Loading Page -->
+    <div class="loading-screen">
+        <div class="loading-background"></div>
+        <div class="loading-grid"></div>
 
-    <!-- Main application script -->
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+        <div class="loading-header">
+            <h1 class="loading-title">
+                <span class="char">O</span>
+                <span class="char">P</span>
+                <span class="char">E</span>
+                <span class="char">N</span>
+                <span class="char">M</span>
+                <span class="char">A</span>
+                <span class="char">N</span>
+                <span class="char">U</span>
+                <span class="char">S</span>
+            </h1>
+            <div class="loading-text">Loading<span class="loading-dots"><span class="dot">.</span><span
+                        class="dot">.</span><span class="dot">.</span></span></div>
+        </div>
+        <div class="loading-line"></div>
 
-    <!-- Page loading script -->
+        <div class="loading-container">
+            <div class="progress-container">
+                <div class="progress-bar"></div>
+            </div>
+            <div class="progress-text">Loading: <span class="digital-glitch">0%</span></div>
+        </div>
+
+        <div class="loading-message">Initializing system components...</div>
+
+        <div class="glitch-effect">
+            <div class="glitch-line"></div>
+            <div class="glitch-line"></div>
+            <div class="glitch-line"></div>
+            <div class="glitch-line"></div>
+        </div>
+    </div>
+
+    <div class="home-container">
+        <div class="hero-section">
+            <div class="particle-container">
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+            </div>
+
+            <div class="title-container">
+                <h1 class="title">OPENMANUS</h1>
+            </div>
+
+            <!-- Add dynamic eyes between title and container -->
+            <div class="title-connector">
+                <div class="eye"></div>
+                <div class="eye"></div>
+            </div>
+
+            <div class="hero-content">
+                <p class="subtitle">Your Intelligent AI Assistant</p>
+                <p class="description"><span class="powered-text">Powered by</span> <span
+                        class="highlight-1">LLMs</span> and <span class="highlight-2">diverse tools</span>.<br>OpenManus
+                    completes tasks through <span class="highlight-3">AI reasoning</span>.</p>
+            </div>
+
+            <!-- Video Section -->
+            <div class="manus-video-wrapper">
+                <video id="manus-video" class="manus-video" muted autoplay loop preload="auto" playsinline
+                    x-webkit-airplay="allow" webkit-playsinline="true" disablePictureInPicture
+                    controlsList="nodownload noremoteplayback">
+                    <source src="https://github.com/user-attachments/assets/6dcfd0d2-9142-45d9-b74e-d10aa75073c6"
+                        type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="video-controls">
+                    <button id="video-play-btn" class="video-control-btn">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button id="video-mute-btn" class="video-control-btn">
+                        <i class="fas fa-volume-mute"></i>
+                    </button>
+                    <button id="video-fullscreen-btn" class="video-control-btn">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+                <div class="video-progress-container">
+                    <div class="video-progress-bg"></div>
+                    <div class="video-progress-bar"></div>
+                </div>
+            </div>
+
+            <a href="/chat" class="cta-button">START <span class="arrow-icon">→</span></a>
+        </div>
+    </div>
     <script>
-        // Hide loading animation after page loads
-        window.addEventListener('load', function () {
-            setTimeout(function () {
-                document.getElementById('page-loader').style.opacity = '0';
-                setTimeout(function () {
-                    document.getElementById('page-loader').style.display = 'none';
-                }, 500);
-            }, 600);
+        // Prevent bounce effect on iOS
+        document.addEventListener('touchmove', function (e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('gesturestart', function (e) {
+            e.preventDefault();
         });
     </script>
+    <script src="/static/js/index.js"></script>
 </body>
 
 </html>

@@ -238,7 +238,6 @@ class BaseAgent(BaseModel, ABC):
         """
         logger.debug(f"Base cleanup called for agent '{self.name}'")
         # Base implementation does nothing
-        pass
 
     @property
     def messages(self) -> List[Message]:

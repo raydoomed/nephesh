@@ -14,6 +14,9 @@ const app = Vue.createApp({
             statusText: 'Not connected',
             connectionStatus: 'disconnected',
 
+            // New: Gradient effect toggle
+            gradientEffectEnabled: true,
+
             // Message data
             messages: [],
             userInput: '',
@@ -25,10 +28,16 @@ const app = Vue.createApp({
             // Tool data
             availableTools: [],
             usedTools: new Set(),
+            specialTools: [], // Empty array, will fetch special tools from the backend
 
             // Panel control
             isAvailableToolsOpen: false,
             isUsedToolsOpen: false,
+
+            // File upload related
+            showUploadOptions: false,
+            uploadTarget: 'workspace', // 'workspace' or 'input'
+            showUploadModal: false,
 
             // Navbar notification
             navbarNotification: {
@@ -133,7 +142,14 @@ const app = Vue.createApp({
             // Proxy settings helper variables
             proxyServerConfig: '',
             proxyUsernameConfig: '',
-            proxyPasswordConfig: ''
+            proxyPasswordConfig: '',
+
+            // Workspace files
+            workspaceFiles: [],
+
+            messagesColumnMode: 'normal',  // 'normal' or 'split'
+            thoughtsVisible: false,
+            currentThought: "",
         };
     },
 
@@ -163,8 +179,32 @@ const app = Vue.createApp({
     },
 
     mounted() {
-        // Automatically create a new session after page load
+        // Load saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            this.isDarkTheme = savedTheme === 'dark';
+        } else {
+            // Check system preference
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            this.isDarkTheme = prefersDark;
+        }
+        this.applyTheme();
+
+        // Load gradient effect preference
+        const savedGradientEffect = localStorage.getItem('gradientEffect');
+        if (savedGradientEffect !== null) {
+            this.gradientEffectEnabled = savedGradientEffect === 'true';
+        }
+        this.applyGradientEffectSettings();
+
+        // Initialize session on page load
         this.createNewSession();
+
+        // Get workspace files list
+        this.refreshFiles();
+
+        // Setup poll for messages
+        this.setupMessagePolling();
 
         // Scroll to the bottom of the message container functionality
         this.$nextTick(() => {
@@ -176,17 +216,6 @@ const app = Vue.createApp({
 
         // Add keyboard shortcuts
         this.setupKeyboardShortcuts();
-
-        // Load saved theme settings
-        this.loadThemePreference();
-
-        // Add click event to theme toggle button
-        this.$nextTick(() => {
-            const themeButton = document.querySelector('.theme-button');
-            if (themeButton) {
-                themeButton.addEventListener('click', this.toggleTheme);
-            }
-        });
 
         // Listen for page resize, update message container scrolling
         window.addEventListener('resize', this.scrollToBottom);
@@ -222,14 +251,14 @@ const app = Vue.createApp({
             this.applyTheme();
 
             // Save preference to localStorage
-            localStorage.setItem('darkMode', this.isDarkTheme);
+            localStorage.setItem('theme', this.isDarkTheme ? 'dark' : 'light');
         },
 
         // Load theme preference
         loadThemePreference() {
-            const savedPreference = localStorage.getItem('darkMode');
+            const savedPreference = localStorage.getItem('theme');
             if (savedPreference !== null) {
-                this.isDarkTheme = savedPreference === 'true';
+                this.isDarkTheme = savedPreference === 'dark';
             }
             this.applyTheme();
         },
@@ -251,6 +280,9 @@ const app = Vue.createApp({
                 if (logoElement) {
                     logoElement.src = '/static/images/logo.png';
                 }
+
+                // Apply gradient effect settings after theme change
+                this.applyGradientEffectSettings();
             } else {
                 // Light mode
                 root.style.setProperty('--background-color', '#f8f9fa');
@@ -260,6 +292,7 @@ const app = Vue.createApp({
                 root.style.setProperty('--text-secondary', '#718096');
                 root.style.setProperty('--border-color', '#e2e8f0');
                 document.body.classList.remove('dark-theme');
+                document.body.classList.remove('gradient-disabled');
 
                 // Use logo_black.png in light mode
                 const logoElement = document.querySelector('.logo');
@@ -452,6 +485,13 @@ const app = Vue.createApp({
                 if (response.data && response.data.tools) {
                     this.availableTools = response.data.tools;
 
+                    // Get special tools list from backend
+                    this.specialTools = this.availableTools
+                        .filter(tool => tool.is_special)
+                        .map(tool => tool.name);
+
+                    console.log('Special tools:', this.specialTools);
+
                     // Add tool loading animation
                     this.animateToolsAppearance();
                 }
@@ -459,6 +499,7 @@ const app = Vue.createApp({
                 console.error('Failed to get tools list:', error);
                 // Don't set default tools list, completely rely on backend data
                 this.availableTools = [];
+                this.specialTools = [];
             }
         },
 
@@ -608,6 +649,15 @@ const app = Vue.createApp({
             }, this.pollRate);
         },
 
+        // Initialize message polling system
+        setupMessagePolling() {
+            // This is an initialization function, the actual polling functionality is implemented in startPolling and stopPolling
+            // Only for compatibility, to ensure old code does not break
+            if (this.pollingInterval) {
+                this.stopPolling();
+            }
+        },
+
         // Stop polling
         stopPolling() {
             if (this.pollingInterval) {
@@ -652,6 +702,18 @@ const app = Vue.createApp({
                             messageObj.name = messageObj.tool_calls[0].function.name;
                         }
                     }
+
+                    // Check if it's a special tool message, and handle terminate specifically
+                    if (messageObj.name && this.specialTools.includes(messageObj.name)) {
+                        // Only show notification card for terminate tool
+                        if (messageObj.name.toLowerCase() === 'terminate') {
+                            // Check if execution is successful
+                            const isSuccess = messageObj.content && messageObj.content.toLowerCase().includes('success');
+
+                            // Show task completion notification card
+                            this.showTaskCompletionCard(isSuccess);
+                        }
+                    }
                 }
 
                 this.messages.push(messageObj);
@@ -683,7 +745,7 @@ const app = Vue.createApp({
 
                 // If used tools panel is closed, automatically open it
                 if (!this.isUsedToolsOpen && this.usedTools.size === 1) {
-                    this.isUsedToolsOpen = true;
+                    this.activeToolTab = 'used';  // Switch to used tab
                 }
             }
 
@@ -695,7 +757,7 @@ const app = Vue.createApp({
 
                         // If used tools panel is closed, automatically open it
                         if (!this.isUsedToolsOpen && this.usedTools.size === 1) {
-                            this.isUsedToolsOpen = true;
+                            this.activeToolTab = 'used';  // Switch to used tab
                         }
                     }
                 }
@@ -750,7 +812,12 @@ const app = Vue.createApp({
                 this.stopPolling();
 
                 // Send termination request
-                await axios.post(`/api/terminate/${this.sessionId}`);
+                const response = await axios.post(`/api/terminate/${this.sessionId}`);
+
+                // Check if the tool output message contains "terminate"
+                const isTerminateSuccess = response.data &&
+                    (response.data.status === 'success' ||
+                        (response.data.message && response.data.message.toLowerCase().includes('success')));
 
                 // Add termination success message
                 this.messages.push({
@@ -767,12 +834,6 @@ const app = Vue.createApp({
                 // Scroll to bottom
                 this.$nextTick(() => {
                     this.scrollToBottom();
-
-                    // Add shake animation effect
-                    const terminatedMsg = document.querySelector('.terminated-message');
-                    if (terminatedMsg) {
-                        terminatedMsg.style.animation = 'shake 0.5s ease-in-out';
-                    }
                 });
             } catch (error) {
                 console.error('Failed to terminate session:', error);
@@ -792,6 +853,27 @@ const app = Vue.createApp({
                     this.connectionStatus = 'connected';
                 }
             }
+        },
+
+        // Show task completion notification card (with eye animation)
+        showTaskCompletionCard(isSuccess) {
+            // Create notification message for the terminate tool
+            const message = isSuccess ?
+                'Session Terminated Successfully!<br>You can now create a new session' :
+                'Session Termination Failed<br>Please try again';
+
+            // Show notification card
+            this.showCenterNotification(
+                `<div class="task-completion-card">
+                    <div class="eyes-animation">
+                        <div class="eye left-eye"></div>
+                        <div class="eye right-eye"></div>
+                    </div>
+                    <div class="task-message">${message}</div>
+                </div>`,
+                isSuccess ? 'success' : 'error',
+                { duration: 5000 }
+            );
         },
 
         // Format message content
@@ -966,7 +1048,7 @@ const app = Vue.createApp({
                     // Update original configuration
                     this.originalConfig = JSON.parse(JSON.stringify(this.config));
 
-                    // 根据热重载状态显示不同的消息
+                    // Display different messages based on hot reload status
                     const reloadSuccess = response.data.reload_success === true;
                     const serverConfigChanged = response.data.server_config_changed === true;
 
@@ -983,7 +1065,7 @@ const app = Vue.createApp({
                             notificationType = 'warning';
                             notificationOptions.showAction = true;
                             notificationOptions.actionType = 'restart';
-                            notificationOptions.duration = null; // 不自动关闭
+                            notificationOptions.duration = null; // Not automatically closed
                         } else {
                             messageContent = `Configuration has been successfully updated, and a new session will be automatically created to apply the new configuration...`;
                             notificationType = 'success';
@@ -993,7 +1075,7 @@ const app = Vue.createApp({
                         notificationType = 'warning';
                         notificationOptions.showAction = true;
                         notificationOptions.actionType = 'restart';
-                        notificationOptions.duration = null; // 不自动关闭
+                        notificationOptions.duration = null; // Not automatically closed
                     }
 
                     // Show central notification card
@@ -1078,7 +1160,246 @@ const app = Vue.createApp({
             }
         },
 
-        // Show central notification card
+        // Workspace files related methods
+        async refreshFiles() {
+            try {
+                const response = await axios.get('/api/files');
+                if (response.data && response.data.files) {
+                    this.workspaceFiles = response.data.files;
+                    this.showNotification('File list has been updated', 'success');
+                }
+            } catch (error) {
+                console.error('Failed to fetch workspace files:', error);
+                this.showError('Failed to fetch file list, please check network connection or server status');
+            }
+        },
+
+        downloadFile(filePath) {
+            // Create a hidden a tag for download
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/api/files/${filePath}`;
+            downloadLink.target = '_blank';
+            downloadLink.download = filePath.split('/').pop();
+
+            // Add to DOM, trigger click, then remove
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+
+            this.showNotification(`Downloading: ${filePath}`, 'info');
+        },
+
+        // Delete file
+        async deleteFile(filePath) {
+            try {
+                if (!confirm(`Are you sure you want to delete file "${filePath}"? This action cannot be undone.`)) {
+                    return;
+                }
+
+                const response = await axios.delete(`/api/files/${filePath}`);
+
+                if (response.data && response.data.message) {
+                    this.showNotification(response.data.message, 'success');
+                    // Refresh file list
+                    this.refreshFiles();
+                }
+            } catch (error) {
+                console.error('Failed to delete file:', error);
+                this.showError(error.response?.data?.error || 'Failed to delete file, please try again later');
+            }
+        },
+
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+
+            return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+
+        // Trigger file selection dialog
+        triggerFileUpload(target) {
+            this.uploadTarget = target || 'workspace';
+            this.showUploadModal = false; // Close modal
+            this.$refs.fileInput.click();
+        },
+
+        // Toggle upload options menu
+        toggleUploadOptions(event) {
+            // Prevent event bubbling
+            if (event) {
+                event.stopPropagation();
+            }
+
+            this.showUploadOptions = !this.showUploadOptions;
+
+            // Click outside to close menu
+            if (this.showUploadOptions) {
+                this.$nextTick(() => {
+                    const closeMenu = (e) => {
+                        if (!e.target.closest('.file-upload-dropdown')) {
+                            this.showUploadOptions = false;
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    };
+
+                    // Use setTimeout to ensure event is not triggered immediately
+                    setTimeout(() => {
+                        document.addEventListener('click', closeMenu);
+                    }, 100);
+                });
+            }
+        },
+
+        // Open file upload modal
+        openUploadModal() {
+            this.showUploadModal = true;
+            // Prevent background scrolling
+            document.body.style.overflow = 'hidden';
+        },
+
+        // Close file upload modal
+        closeUploadModal() {
+            this.showUploadModal = false;
+            // Restore background scrolling
+            document.body.style.overflow = '';
+        },
+
+        // Handle file upload
+        async handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (this.uploadTarget === 'input') {
+                // Load to input
+                this.loadFileToInput(file);
+            } else {
+                // Upload to workspace
+                await this.uploadFileToWorkspace(file);
+            }
+
+            // Clear file input, allow uploading same file again
+            this.$refs.fileInput.value = '';
+        },
+
+        // Load file content to input
+        loadFileToInput(file) {
+            // Check file type
+            if (!file.type.match('text.*') && !file.name.match(/\.(txt|md|json|csv|py|js|html|css|xml)$/i)) {
+                this.showNotification('Only text files can be loaded to input', 'warning');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result;
+                // If file is too large, only load part of it
+                const maxChars = 5000;
+                if (content.length > maxChars) {
+                    this.userInput = content.substring(0, maxChars) +
+                        `\n\n[Note: File ${file.name} is too large, only the first ${maxChars} characters are loaded]`;
+                    this.showNotification(`File ${file.name} is too large, only part of the content is loaded`, 'warning');
+                } else {
+                    this.userInput = content;
+                    this.showNotification(`File ${file.name} has been loaded to input`, 'success');
+                }
+
+                // Automatically focus input
+                this.$nextTick(() => {
+                    this.$refs.userInputArea.focus();
+                });
+            };
+
+            reader.onerror = () => {
+                this.showError(`Failed to read file ${file.name}`);
+            };
+
+            reader.readAsText(file);
+        },
+
+        // Upload file to workspace
+        async uploadFileToWorkspace(file) {
+            try {
+                // Create FormData object
+                const formData = new FormData();
+                formData.append('file', file);
+
+                this.showNotification(`Uploading file: ${file.name}...`, 'info');
+
+                // Send file to server
+                const response = await axios.post('/api/files', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                if (response.data && response.data.file) {
+                    this.showNotification(`File ${file.name} has been uploaded successfully`, 'success');
+                    // Refresh file list
+                    this.refreshFiles();
+                }
+            } catch (error) {
+                console.error('Failed to upload file:', error);
+                this.showError(error.response?.data?.error || 'Failed to upload file, please try again later');
+            }
+        },
+
+        // Automatically adjust input height
+        autoResizeTextarea() {
+            this.$nextTick(() => {
+                const textarea = this.$refs.userInputArea;
+                if (!textarea) return;
+
+                // Save current scroll position
+                const scrollTop = textarea.scrollTop;
+
+                // Reset height, so new height can be calculated correctly
+                textarea.style.height = 'auto';
+
+                // Set new height (scrollHeight is the actual height of the content), but not exceeding the maximum height
+                const newHeight = Math.min(80, Math.max(36, textarea.scrollHeight));
+                textarea.style.height = `${newHeight}px`;
+
+                // If content needs scrolling, restore scroll position
+                if (textarea.scrollHeight > newHeight) {
+                    textarea.scrollTop = scrollTop;
+                }
+
+                // Adjust message container scroll position, ensure latest message is visible
+                if (this.$refs.agentMessagesContainer) {
+                    const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }
+            });
+        },
+
+        // Toggle gradient effect
+        toggleGradientEffect() {
+            this.gradientEffectEnabled = !this.gradientEffectEnabled;
+            this.applyGradientEffectSettings();
+
+            // Save preference to localStorage
+            localStorage.setItem('gradientEffect', this.gradientEffectEnabled.toString());
+
+            // Show notification about toggled status
+            this.showNotification(
+                this.gradientEffectEnabled ? 'Blue-red gradient effect has been enabled' : 'Blue-red gradient effect has been disabled',
+                'info'
+            );
+        },
+
+        // Apply gradient effect settings
+        applyGradientEffectSettings() {
+            const body = document.body;
+            if (this.gradientEffectEnabled) {
+                body.classList.remove('gradient-disabled');
+            } else {
+                body.classList.add('gradient-disabled');
+            }
+        },
     },
 
     beforeUnmount() {
@@ -1094,12 +1415,6 @@ const app = Vue.createApp({
         // Remove event listeners
         document.removeEventListener('mousemove', this.initMouseTracking);
         document.removeEventListener('keydown', this.setupKeyboardShortcuts);
-
-        // Remove theme toggle button event
-        const themeButton = document.querySelector('.theme-button');
-        if (themeButton) {
-            themeButton.removeEventListener('click', this.toggleTheme);
-        }
 
         // Listen for page resize, update message container scrolling
         window.removeEventListener('resize', this.scrollToBottom);
@@ -1232,12 +1547,11 @@ style.textContent = `
         white-space: nowrap;
         pointer-events: none;
         opacity: 0;
-        transform: translateY(-10px);
         transition: opacity 0.3s, transform 0.3s;
         z-index: 1000;
         top: -30px;
         left: 50%;
-        transform: translateX(-50%);
+        transform: translateX(-50%) translateY(-10px);
     }
 
     .tooltip.active {
@@ -1255,12 +1569,6 @@ style.textContent = `
         border-left: 5px solid transparent;
         border-right: 5px solid transparent;
         border-top: 5px solid rgba(60, 60, 60, 0.9);
-    }
-
-    @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-        20%, 40%, 60%, 80% { transform: translateX(5px); }
     }
 `;
 document.head.appendChild(style);

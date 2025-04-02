@@ -236,13 +236,22 @@ body {
 
 /* Toolbox */
 .toolbox {
-    width: 300px;
-    background-color: var(--surface-color);
-    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     height: 100%;
-    overflow-y: auto;
+    width: 300px;
+    border-right: 1px solid var(--border-color);
+    background-color: var(--sidebar-bg);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+/* Tools container to allow proper flex layout */
+.tools-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .tool-section {
@@ -255,6 +264,7 @@ body {
     align-items: center;
     gap: var(--spacing-2);
     margin-bottom: var(--spacing-3);
+    position: relative;
 }
 
 .tool-header i {
@@ -266,6 +276,28 @@ body {
     font-size: var(--font-size-md);
     font-weight: 600;
     color: var(--text-color);
+    flex-grow: 1;
+}
+
+.refresh-btn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: var(--spacing-1);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-fast);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.refresh-btn:hover {
+    background-color: var(--border-color);
+    color: var(--primary-color);
+    transform: rotate(180deg);
 }
 
 /* Button styles */
@@ -354,9 +386,8 @@ body {
 
 /* Tool panel */
 .tools-panel {
-    max-height: 300px;
+    max-height: 100%;
     overflow-y: auto;
-    margin-bottom: var(--spacing-4);
 }
 
 .tools-list {
@@ -409,30 +440,6 @@ body {
     line-height: 1.4;
 }
 
-/* System info styles in toolbox */
-.system-info {
-    margin-bottom: var(--spacing-3);
-}
-
-.system-info .info-content {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-    line-height: 1.5;
-}
-
-.system-info .info-content p {
-    margin-bottom: var(--spacing-2);
-}
-
-.system-info .info-content ul {
-    margin-left: var(--spacing-3);
-    margin-bottom: var(--spacing-2);
-}
-
-.system-info .info-content li {
-    margin-bottom: var(--spacing-1);
-}
-
 /* Chat area */
 .chat-section {
     flex: 1;
@@ -449,9 +456,15 @@ body {
 .current-task {
     display: flex;
     align-items: center;
-    padding: var(--spacing-3) var(--spacing-4);
+    padding: var(--spacing-2) var(--spacing-3);
     background-color: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
+    margin: var(--spacing-3);
+    margin-bottom: 0;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-sm);
+    height: 44px;
+    overflow: hidden;
 }
 
 .task-label {
@@ -462,10 +475,11 @@ body {
     font-size: var(--font-size-sm);
     color: var(--primary-color);
     padding-right: var(--spacing-3);
+    white-space: nowrap;
 }
 
 .task-content {
-    padding: var(--spacing-2) var(--spacing-3);
+    padding: var(--spacing-1) var(--spacing-2);
     font-size: var(--font-size-sm);
     flex: 1;
     overflow: hidden;
@@ -480,27 +494,23 @@ body {
 .messages-container-split {
     display: flex;
     width: 100%;
-    height: calc(100% - 70px);
-    /* Subtract input box height and leave extra space */
+    height: 100%;
     overflow: hidden;
     gap: var(--spacing-3);
     padding: var(--spacing-3);
-    padding-bottom: var(--spacing-3);
-    /* Keep bottom padding */
-    margin-bottom: 50px;
-    /* Space for input box fixed at bottom, slightly less than actual height */
+    margin-bottom: 0;
 }
 
 /* Message styles */
 .message {
-    max-width: 85%;
-    margin-bottom: var(--spacing-5);
-    border-radius: var(--border-radius-lg);
-    overflow: hidden;
-    background-color: var(--surface-color);
-    box-shadow: var(--shadow-sm);
+    background-color: var(--card-color);
     border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-3);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
     transition: all var(--transition-normal) ease;
+    position: relative;
 }
 
 .message:hover {
@@ -508,15 +518,13 @@ body {
 }
 
 .message.assistant {
-    margin-right: auto;
-    background-color: var(--surface-color);
-    border-left: 4px solid var(--primary-color);
+    border-left: 3px solid var(--primary-color);
+    max-width: 100%;
 }
 
 .message.tool {
-    margin-left: auto;
-    background-color: var(--surface-color);
-    border-left: 4px solid var(--secondary-color);
+    border-left: 3px solid var(--warning-color);
+    max-width: 100%;
 }
 
 .message-header {
@@ -548,13 +556,13 @@ body {
 }
 
 .message.tool .message-role i {
-    color: var(--secondary-color);
+    color: var(--warning-color);
 }
 
 .message-role span {
     font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--text-color);
+    font-weight: 500;
+    margin-left: var(--spacing-2);
 }
 
 .message-time {
@@ -707,115 +715,6 @@ code {
 .processing-indicator p {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
-}
-
-/* Input area */
-.input-area {
-    height: auto;
-    min-height: 60px;
-    background-color: var(--surface-color);
-    padding: var(--spacing-3) var(--spacing-4);
-    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
-    /* Enhanced top shadow effect */
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    z-index: 10;
-    border-top: 1px solid var(--border-color);
-}
-
-.input-container {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-    height: 44px;
-    width: 100%;
-    max-width: 100%;
-}
-
-textarea {
-    flex: 1;
-    resize: none;
-    padding: var(--spacing-2) var(--spacing-3);
-    font-size: var(--font-size-sm);
-    line-height: 1.5;
-    background-color: var(--background-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    outline: none;
-    transition: all var(--transition-normal) ease;
-    height: 44px;
-    max-height: 44px;
-    overflow-y: auto;
-    width: 100%;
-}
-
-textarea:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
-}
-
-.input-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-2);
-}
-
-.action-btn {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--border-radius-full);
-    border: 1px solid var(--border-color);
-    background-color: var(--background-color);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all var(--transition-normal) ease;
-}
-
-.send-btn {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--border-radius-full);
-    border: none;
-    background-color: var(--primary-color);
-    color: white;
-    cursor: pointer;
-    transition: all var(--transition-normal) ease;
-    box-shadow: var(--shadow-sm);
-}
-
-.action-btn:hover {
-    background-color: var(--border-color);
-    transform: translateY(-2px);
-}
-
-.send-btn:hover {
-    background-color: var(--primary-dark);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-}
-
-.action-btn:active,
-.send-btn:active {
-    transform: translateY(0);
-    box-shadow: none;
-}
-
-.action-btn:disabled,
-.send-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
 }
 
 /* Image modal window */
@@ -974,12 +873,129 @@ textarea:focus {
 
 /* Dark theme */
 .dark-theme {
+    --primary-gradient: linear-gradient(135deg, #4a00e0, #8e2de2, #e94057);
+    --button-gradient: linear-gradient(135deg, #4a00e0, #e94057);
+    --icon-gradient: linear-gradient(135deg, #4a00e0, #e94057);
+    --border-gradient: linear-gradient(135deg, #4a00e0, #8e2de2, #e94057);
+    --hover-gradient: linear-gradient(135deg, #5d1aff, #ff4d6d);
+    --active-gradient: linear-gradient(135deg, #3700b3, #dd2c4f);
+    --text-gradient: linear-gradient(135deg, #c1b3ff, #ffb3be);
+
     --background-color: #1a202c;
     --surface-color: #2d3748;
     --card-color: #2d3748;
     --text-color: #f7fafc;
     --text-secondary: #a0aec0;
     --border-color: #4a5568;
+    --sidebar-bg: #1f2937;
+}
+
+/* Style the buttons in dark mode */
+.dark-theme .primary-btn {
+    background: var(--button-gradient);
+    border: none;
+    box-shadow: 0 4px 15px rgba(74, 0, 224, 0.3);
+    transition: all 0.3s ease;
+}
+
+.dark-theme .primary-btn:hover {
+    background: var(--hover-gradient);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 0, 224, 0.4);
+}
+
+.dark-theme .primary-btn:active {
+    background: var(--active-gradient);
+    transform: translateY(0);
+}
+
+.dark-theme .secondary-btn {
+    background: transparent;
+    border: 1px solid;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    color: #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.dark-theme .secondary-btn:hover {
+    background-color: rgba(74, 0, 224, 0.1);
+    box-shadow: 0 4px 15px rgba(74, 0, 224, 0.2);
+}
+
+/* Beautify toolbar and icons */
+.dark-theme .tool-header i,
+.dark-theme .message-role i,
+.dark-theme .status-container.connected .status-text,
+.dark-theme .notification-icon i {
+    background: var(--icon-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.dark-theme .tool-section {
+    border-left: 2px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 0 0 0 2px;
+}
+
+/* Beautify active state elements */
+.dark-theme .tab-btn.active {
+    background: var(--button-gradient);
+    color: white;
+}
+
+.dark-theme .tools-list .tool-item:hover {
+    background: linear-gradient(90deg, rgba(74, 0, 224, 0.1), rgba(233, 64, 87, 0.1));
+    border-left: 2px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 0 0 0 2px;
+}
+
+.dark-theme .system-highlight {
+    background: var(--text-gradient);
+    background-size: 200% auto;
+    animation: shimmerText 5s linear infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+    text-shadow: none;
+}
+
+/* Beautify message header */
+.dark-theme .message-header {
+    background: linear-gradient(90deg, rgba(74, 0, 224, 0.1), rgba(233, 64, 87, 0.1));
+}
+
+/* Beautify copyright information */
+.dark-theme .copyright-content p {
+    background: var(--text-gradient);
+    background-size: 200% auto;
+    animation: shimmerText 5s linear infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+}
+
+/* Beautify theme toggle button */
+.dark-theme .theme-toggle,
+.dark-theme .github-nav-link,
+.dark-theme .config-toggle {
+    background: var(--button-gradient);
+    color: white;
+}
+
+.dark-theme .theme-toggle:hover,
+.dark-theme .github-nav-link:hover,
+.dark-theme .config-toggle:hover {
+    background: var(--hover-gradient);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(74, 0, 224, 0.3);
 }
 
 /* Responsive design */
@@ -1051,24 +1067,25 @@ textarea:focus {
         height: 32px;
     }
 
-    .message {
-        max-width: 95%;
-    }
-
     .messages-container-split {
         flex-direction: column;
-        height: calc(100% - 70px);
-        /* Consistent with above */
+        height: 100%;
         gap: var(--spacing-3);
         padding: var(--spacing-3);
-        padding-bottom: var(--spacing-3);
-        /* Keep bottom padding */
-        margin-bottom: 50px;
-        /* Same as non-mobile version */
+        margin-bottom: 0;
     }
 
     .messages-column {
         height: 50%;
+    }
+
+    /* Adjust the style of the proxy input box on mobile devices */
+    .agent-input-area {
+        padding: var(--spacing-2);
+    }
+
+    .agent-input-area .input-container {
+        gap: var(--spacing-2);
     }
 }
 
@@ -1107,6 +1124,7 @@ textarea:focus {
     flex: 1;
     overflow-y: auto;
     padding: var(--spacing-3);
+    padding-bottom: var(--spacing-3);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-3);
@@ -1168,11 +1186,6 @@ textarea:focus {
 
 .message-content ol li {
     padding-left: var(--spacing-2);
-}
-
-/* System info panel */
-.system-info-panel {
-    display: none;
 }
 
 /* Config button styles */
@@ -1385,7 +1398,7 @@ textarea:focus {
     border-top: 1px dashed var(--border-color);
 }
 
-/* 通知样式 */
+/* Notification styles */
 .notification {
     position: fixed;
     top: 20px;
@@ -1439,7 +1452,7 @@ textarea:focus {
     opacity: 1;
 }
 
-/* 不同类型的通知样式 */
+/* Different types of notification styles */
 .notification.success .notification-icon {
     color: #4caf50;
 }
@@ -1456,7 +1469,7 @@ textarea:focus {
     color: #2196f3;
 }
 
-/* 导航栏通知样式 */
+/* Navbar notification styles */
 .navbar-notification-area {
     flex: 1;
     margin: 0 15px;
@@ -1536,19 +1549,19 @@ textarea:focus {
     }
 }
 
-/* 中央通知卡片样式 */
+/* Central notification card styles */
 .center-notification {
     position: fixed;
     top: 70px;
-    /* 位于顶部导航栏下方 */
+    /* Located below the top navigation bar */
     left: 50%;
     transform: translateX(-50%);
     min-width: 350px;
     max-width: 500px;
     background-color: #4caf50;
-    /* 绿色背景 */
+    /* Green background */
     color: white;
-    /* 白色字体 */
+    /* White text */
     border-radius: 8px;
     box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.15);
     z-index: 9999;
@@ -1558,7 +1571,7 @@ textarea:focus {
     backdrop-filter: blur(10px);
 }
 
-/* 添加漂亮的左侧边框指示器 */
+/* Add a beautiful left border indicator */
 .center-notification:before {
     content: '';
     position: absolute;
@@ -1695,4 +1708,1003 @@ textarea:focus {
         opacity: 1;
         transform: translate(-50%, 0);
     }
+}
+
+/* File browser styles */
+.workspace-files {
+    margin-top: var(--spacing-3);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.no-files {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--spacing-4);
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.files-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-2) var(--spacing-3);
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color var(--transition-normal);
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-item:hover {
+    background-color: var(--hover-color);
+}
+
+.file-icon {
+    margin-right: var(--spacing-3);
+    color: var(--primary-color);
+}
+
+.file-info {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.file-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.file-actions {
+    display: flex;
+    gap: var(--spacing-2);
+}
+
+.file-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: var(--spacing-1);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-fast);
+}
+
+.file-action-btn:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.file-action-btn.delete-btn:hover {
+    background-color: var(--error-color);
+    color: white;
+}
+
+.files-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--spacing-3);
+    margin-bottom: var(--spacing-2);
+    width: 100%;
+}
+
+.files-actions .action-btn {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    width: auto;
+}
+
+.files-actions .action-btn:hover {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* File upload dropdown menu */
+.file-upload-dropdown {
+    position: relative;
+}
+
+.upload-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    min-width: 150px;
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+    margin-top: 5px;
+}
+
+.upload-option {
+    padding: var(--spacing-2) var(--spacing-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    transition: background-color var(--transition-fast);
+}
+
+.upload-option:first-child {
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
+}
+
+.upload-option:last-child {
+    border-bottom-left-radius: var(--border-radius);
+    border-bottom-right-radius: var(--border-radius);
+}
+
+.upload-option:not(:last-child) {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.upload-option:hover {
+    background-color: var(--hover-color);
+}
+
+/* File upload modal */
+.upload-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.65);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(3px);
+    animation: fadeIn 0.2s ease;
+}
+
+.upload-modal-content {
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    width: 420px;
+    max-width: 90%;
+    overflow: hidden;
+    animation: scaleIn 0.3s ease;
+    transform: translateY(0);
+    transition: transform 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.upload-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-3);
+    background: linear-gradient(135deg, var(--primary-color) 0%, #4466ee 100%);
+    color: white;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.upload-modal-header h3 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.upload-modal-header .close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: var(--font-size-md);
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius-full);
+    transition: all 0.2s ease;
+}
+
+.upload-modal-header .close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+}
+
+.upload-options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+}
+
+.upload-option-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-4) var(--spacing-3);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.upload-option-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: linear-gradient(90deg, var(--primary-color), #4466ee);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.upload-option-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    transform: translateY(-5px);
+}
+
+.upload-option-card:hover::before {
+    opacity: 1;
+}
+
+.option-icon {
+    font-size: 2.2rem;
+    color: var(--primary-color);
+    margin-bottom: var(--spacing-3);
+    transition: transform 0.3s ease;
+}
+
+.upload-option-card:hover .option-icon {
+    transform: scale(1.1);
+}
+
+.option-text h4 {
+    margin: 0 0 var(--spacing-1) 0;
+    font-size: 0.95rem;
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.option-text p {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* Input area in the agent panel */
+.agent-input-area {
+    padding: var(--spacing-2) var(--spacing-3);
+    background-color: var(--background-color);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.agent-input-area .input-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    height: auto;
+    width: 100%;
+    max-width: 100%;
+    position: relative;
+}
+
+.agent-input-area textarea {
+    flex: 1;
+    resize: none;
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    outline: none;
+    transition: all var(--transition-normal) ease;
+    height: 42px;
+    /* Increase initial height */
+    min-height: 42px;
+    /* Increase minimum height */
+    max-height: 120px;
+    overflow-y: hidden;
+    /* Initially hide scrollbar */
+    width: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Show scrollbar when input area is focused or has content */
+.agent-input-area textarea:focus,
+.agent-input-area textarea:not(:empty) {
+    overflow-y: auto;
+    /* Show scrollbar only when needed */
+}
+
+.agent-input-area textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+/* Action button styles */
+.action-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius-full);
+    border: 1px solid var(--border-color);
+    background-color: var(--background-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-normal) ease;
+}
+
+.send-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius-full);
+    border: none;
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-normal) ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.action-btn:hover {
+    background-color: var(--border-color);
+    transform: translateY(-2px);
+}
+
+.send-btn:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.action-btn:active,
+.send-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.action-btn:disabled,
+.send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.input-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+/* Task completion card styles */
+.task-completion-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 15px;
+}
+
+.eyes-animation {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.eye {
+    width: 30px;
+    height: 30px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    margin: 0 15px;
+    position: relative;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.eye:after {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    background-color: #333333;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: eye-move 4s infinite ease-in-out;
+}
+
+.task-message {
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.5;
+}
+
+@keyframes eye-move {
+
+    0%,
+    100% {
+        transform: translate(-50%, -50%);
+    }
+
+    25% {
+        transform: translate(-80%, -50%);
+    }
+
+    50% {
+        transform: translate(-50%, -80%);
+    }
+
+    75% {
+        transform: translate(-20%, -50%);
+    }
+}
+
+/* Special styles for success and failure status */
+.center-notification.success .eye:after {
+    background-color: #43a047;
+}
+
+.center-notification.error .eye:after {
+    background-color: #e53935;
+}
+
+/* Adjust card styles to fit the eye animation */
+.center-notification-content {
+    padding: 16px 20px;
+    flex-direction: column;
+}
+
+.notification-icon {
+    display: none;
+}
+
+/* Message text style inside the task completion card */
+.task-completion-card .task-message {
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* System Information Styles */
+.system-info-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    font-weight: 500;
+    margin: 0;
+    max-width: 95%;
+    animation: fadeIn 0.8s ease-out forwards;
+    position: relative;
+    overflow: hidden;
+    transform-origin: left center;
+}
+
+.system-info-text::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--primary-color), transparent);
+    animation: infoPulse 4s infinite;
+}
+
+.dark-theme .system-info-text {
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.system-info-text {
+    color: #333333;
+}
+
+.system-highlight {
+    font-weight: 700;
+    position: relative;
+    display: inline-block;
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+.dark-theme .system-highlight {
+    color: #00ffcc;
+}
+
+.system-highlight {
+    color: #0066cc;
+}
+
+/* Emoji Styles */
+.system-emoji {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 2px;
+    animation: bounce 2s infinite;
+    transform-origin: center;
+}
+
+/* System Information Animation Effects */
+@keyframes infoPulse {
+
+    0%,
+    100% {
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+@keyframes glow {
+    0% {
+        text-shadow: 0 0 0px rgba(0, 102, 204, 0.3);
+    }
+
+    100% {
+        text-shadow: 0 0 8px rgba(0, 102, 204, 0.7);
+    }
+}
+
+.dark-theme .system-highlight {
+    animation: glowDark 2s ease-in-out infinite alternate;
+}
+
+@keyframes glowDark {
+    0% {
+        text-shadow: 0 0 0px rgba(0, 255, 204, 0.3);
+    }
+
+    100% {
+        text-shadow: 0 0 8px rgba(0, 255, 204, 0.7);
+    }
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+/* Copyright section */
+.copyright-section {
+    margin-top: auto;
+    padding: 10px;
+    text-align: center;
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.copyright-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 30px;
+}
+
+.copyright-content p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Add gradient animation effect */
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Apply dynamic gradient effect to elements in dark mode */
+.dark-theme .primary-btn,
+.dark-theme .tab-btn.active,
+.dark-theme .theme-toggle,
+.dark-theme .github-nav-link,
+.dark-theme .config-toggle {
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+}
+
+/* Style the scrollbar */
+.dark-theme::-webkit-scrollbar-thumb {
+    background: var(--button-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+    border-radius: 10px;
+}
+
+/* Style the message area */
+.dark-theme .message.assistant {
+    border-left: 3px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+}
+
+/* Style the tool area */
+.dark-theme .message.tool {
+    border-left: 3px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+}
+
+/* Style the message input area */
+.dark-theme .agent-input-area .input-container {
+    border: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    box-shadow: 0 4px 15px rgba(74, 0, 224, 0.1);
+}
+
+.dark-theme .agent-input-area .input-container:focus-within {
+    box-shadow: 0 4px 20px rgba(74, 0, 224, 0.2);
+}
+
+/* Style the send button */
+.dark-theme .send-btn {
+    background: var(--button-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+}
+
+.dark-theme .send-btn:hover {
+    background: var(--hover-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(74, 0, 224, 0.3);
+}
+
+/* Style the session status indicator */
+.dark-theme .connected .status-dot {
+    background: var(--button-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite, pulse 2s infinite;
+    box-shadow: 0 0 10px rgba(74, 0, 224, 0.6);
+}
+
+/* Add shimmer effect to system information */
+@keyframes shimmerText {
+    0% {
+        background-position: -100% 50%;
+    }
+
+    100% {
+        background-position: 200% 50%;
+    }
+}
+
+.dark-theme .system-highlight {
+    background: var(--text-gradient);
+    background-size: 200% auto;
+    animation: shimmerText 5s linear infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Change the active state of the tool list label */
+.dark-theme .tool-header h3 {
+    background: var(--text-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+}
+
+/* Style the copyright information */
+.dark-theme .copyright-content p {
+    background: var(--text-gradient);
+    background-size: 200% auto;
+    animation: shimmerText 5s linear infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+}
+
+/* Style the navigation bar */
+.dark-theme .main-nav {
+    background: linear-gradient(90deg, rgba(26, 32, 44, 0.95), rgba(45, 55, 72, 0.95));
+    box-shadow: 0 2px 10px rgba(74, 0, 224, 0.2);
+    border-bottom: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 0 0 1px 0;
+}
+
+/* Style the reply message card */
+.dark-theme .message {
+    transition: all 0.3s ease;
+}
+
+.dark-theme .message:hover {
+    box-shadow: 0 4px 20px rgba(74, 0, 224, 0.15);
+    transform: translateY(-2px);
+}
+
+/* Style the code block */
+.dark-theme pre {
+    background: linear-gradient(135deg, rgba(26, 32, 44, 0.9), rgba(45, 55, 72, 0.9));
+    border: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+}
+
+/* Style the current task display */
+.dark-theme .current-task {
+    background: linear-gradient(90deg, rgba(74, 0, 224, 0.1), rgba(233, 64, 87, 0.1));
+    border-left: 3px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 0 0 0 3px;
+}
+
+.dark-theme .task-label i {
+    background: var(--icon-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Style the configuration panel */
+.dark-theme .config-panel {
+    background: linear-gradient(135deg, rgba(26, 32, 44, 0.95), rgba(45, 55, 72, 0.95));
+    border-left: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 0 0 0 1px;
+}
+
+.dark-theme .config-panel-header {
+    background: linear-gradient(90deg, rgba(74, 0, 224, 0.2), rgba(233, 64, 87, 0.2));
+    border-bottom: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 0 0 1px 0;
+}
+
+.dark-theme .config-tab.active {
+    background: var(--button-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+}
+
+/* Style the tool call area */
+.dark-theme .tool-call {
+    background: linear-gradient(90deg, rgba(26, 32, 44, 0.8), rgba(45, 55, 72, 0.8));
+    border: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+}
+
+.dark-theme .tool-call-header {
+    background: linear-gradient(90deg, rgba(74, 0, 224, 0.2), rgba(233, 64, 87, 0.2));
+}
+
+/* Style the tool message icon (resolve conflicts) */
+.dark-theme .message-role i,
+.dark-theme .tool-header i {
+    background: var(--icon-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Fix the connection status indicator animation */
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(74, 0, 224, 0.6);
+    }
+
+    70% {
+        box-shadow: 0 0 0 6px rgba(74, 0, 224, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(74, 0, 224, 0);
+    }
+}
+
+/* Fix the issue where some text gradients do not display */
+.dark-theme .tool-header h3,
+.dark-theme .copyright-content p,
+.dark-theme .system-highlight,
+.dark-theme .message-role i,
+.dark-theme .tool-header i,
+.dark-theme .task-label i,
+.dark-theme .status-container.connected .status-text {
+    -webkit-text-fill-color: transparent;
+}
+
+/* Gradient effect toggle button */
+.gradient-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--surface-color);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.gradient-toggle i {
+    font-size: 24px;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+}
+
+.dark-theme .gradient-toggle {
+    display: flex;
+    background: #2d3748;
+}
+
+.dark-theme .gradient-toggle.gradient-active {
+    background: var(--button-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+    box-shadow: 0 4px 20px rgba(74, 0, 224, 0.4);
+}
+
+.dark-theme .gradient-toggle.gradient-active i {
+    color: white;
+}
+
+.dark-theme .gradient-toggle:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(74, 0, 224, 0.3);
+}
+
+.dark-theme .gradient-toggle:active {
+    transform: translateY(0);
+}
+
+/* Centralize the gradient effect in a single class for easier toggle control */
+.dark-theme.gradient-disabled .primary-btn,
+.dark-theme.gradient-disabled .tab-btn.active,
+.dark-theme.gradient-disabled .theme-toggle,
+.dark-theme.gradient-disabled .github-nav-link,
+.dark-theme.gradient-disabled .config-toggle,
+.dark-theme.gradient-disabled .send-btn,
+.dark-theme.gradient-disabled .config-tab.active,
+.dark-theme.gradient-disabled .connected .status-dot {
+    background: #4a5568;
+    animation: none;
+}
+
+.dark-theme.gradient-disabled .tool-header h3,
+.dark-theme.gradient-disabled .copyright-content p,
+.dark-theme.gradient-disabled .system-highlight,
+.dark-theme.gradient-disabled .message-role i,
+.dark-theme.gradient-disabled .tool-header i,
+.dark-theme.gradient-disabled .task-label i,
+.dark-theme.gradient-disabled .status-container.connected .status-text {
+    background: none;
+    -webkit-text-fill-color: var(--text-color);
+    color: var(--text-color);
+    animation: none;
+}
+
+/* Style the copyright section in dark mode */
+.dark-theme .copyright-section {
+    margin-top: auto;
+    padding: 10px;
+    text-align: center;
+    border-top: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    border-image-width: 1px 0 0 0;
+    background: linear-gradient(135deg, rgba(74, 0, 224, 0.15), rgba(233, 64, 87, 0.15));
+    box-shadow: 0 -4px 15px rgba(74, 0, 224, 0.1);
+    flex-shrink: 0;
+}
+
+.dark-theme .copyright-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 30px;
+}
+
+/* Clear Beta label blue-red gradient style */
+.dark-theme .version-badge {
+    background: linear-gradient(90deg, #0066ff, #ff3366);
+    background-size: 200% 200%;
+    animation: gradientShift 5s ease infinite;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 102, 255, 0.3);
 }

@@ -47,6 +47,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/chat")
+def chat_page():
+    return render_template("chat.html")
+
+
 @app.route("/api/session", methods=["POST"])
 def create_session():
     from app.config import config
@@ -85,7 +90,14 @@ def get_available_tools(session_id):
     tools = []
     if hasattr(agent, "available_tools") and agent.available_tools:
         for tool in agent.available_tools:
+            # Ensure all tools are included, including special tools
             tool_info = {"name": tool.name, "description": tool.description}
+            # Mark special tools
+            if (
+                hasattr(agent, "special_tool_names")
+                and tool.name in agent.special_tool_names
+            ):
+                tool_info["is_special"] = True
             tools.append(tool_info)
 
     return jsonify({"tools": tools})
@@ -379,6 +391,8 @@ async def terminate_session(session_id):
         return jsonify({"error": "Invalid session ID"}), 400
 
     agent = sessions[session_id]
+    success = True  # Mark if termination is successful
+
     if agent:
         try:
             # Call agent cleanup method
@@ -398,17 +412,58 @@ async def terminate_session(session_id):
                     task.cancel()
         except Exception as e:
             logger.error(f"Error cleaning up agent {session_id}: {e}", exc_info=True)
+            success = False  # Mark termination as failed
             return jsonify({"error": f"Failed to clean up resources: {str(e)}"}), 500
+
+    # Add terminate tool message to message queue
+    try:
+        if session_id in message_queues:
+            status_message = "success" if success else "failed"
+            terminate_message = Message(
+                role="tool",
+                name="terminate",
+                content=f"Observed output of cmd terminate executed: The interaction has been completed with status: {status_message}",
+            )
+            message_queues[session_id].put(_format_message(terminate_message))
+    except Exception as e:
+        logger.error(f"Error adding terminate message to queue: {e}", exc_info=True)
 
     # Remove session
     try:
-        del sessions[session_id]
-        del message_queues[session_id]
-        del message_counters[session_id]
-        logger.info(f"Session {session_id} terminated")
+        # Delay session deletion to ensure terminate message can be received by frontend
+        import threading
+
+        def delayed_session_cleanup():
+            try:
+                time.sleep(
+                    5
+                )  # Wait 5 seconds to ensure frontend receives terminate message
+                if session_id in sessions:
+                    del sessions[session_id]
+                if session_id in message_queues:
+                    del message_queues[session_id]
+                if session_id in message_counters:
+                    del message_counters[session_id]
+                logger.info(f"Session {session_id} terminated (delayed cleanup)")
+            except Exception as e:
+                logger.error(
+                    f"Error in delayed cleanup for session {session_id}: {e}",
+                    exc_info=True,
+                )
+
+        # Start delayed cleanup thread
+        cleanup_thread = threading.Thread(target=delayed_session_cleanup)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
+
+        logger.info(f"Session {session_id} termination initiated")
     except Exception as e:
-        logger.error(f"Error removing session {session_id}: {e}", exc_info=True)
-        return jsonify({"error": f"Failed to remove session: {str(e)}"}), 500
+        logger.error(
+            f"Error setting up delayed cleanup for session {session_id}: {e}",
+            exc_info=True,
+        )
+        success = False
+        return jsonify({"error": f"Failed to initiate session cleanup: {str(e)}"}), 500
 
     return jsonify({"status": "success", "message": "Session terminated"})
 
@@ -512,5 +567,109 @@ def update_config():
         return jsonify({"error": f"Failed to save configuration: {str(e)}"}), 500
 
 
-if __name__ == "__main__":
-    app.run(debug=True)
+@app.route("/api/files", methods=["GET"])
+def list_workspace_files():
+    """Get a list of files in the workspace directory."""
+    try:
+        workspace_root = config.workspace_root
+        files = []
+
+        for item in workspace_root.iterdir():
+            if item.is_file():
+                files.append(
+                    {
+                        "name": item.name,
+                        "path": str(item.relative_to(workspace_root)),
+                        "size": item.stat().st_size,
+                        "modified": item.stat().st_mtime,
+                    }
+                )
+
+        return jsonify({"files": files})
+    except Exception as e:
+        logger.error(f"Error listing workspace files: {str(e)}", exc_info=True)
+        return jsonify({"error": f"Failed to list workspace files: {str(e)}"}), 500
+
+
+@app.route("/api/files/<path:file_path>", methods=["GET"])
+def download_workspace_file(file_path):
+    """Download a file from the workspace directory."""
+    from flask import send_file
+
+    try:
+        workspace_root = config.workspace_root
+        # Ensure the file path is secure
+        file_path = os.path.normpath(file_path).lstrip("/")
+        full_path = workspace_root / file_path
+
+        if not full_path.exists():
+            return jsonify({"error": "File not found"}), 404
+
+        if not full_path.is_file():
+            return jsonify({"error": "Not a file"}), 400
+
+        # Send the file as an attachment
+        return send_file(
+            full_path, as_attachment=True, download_name=os.path.basename(file_path)
+        )
+    except Exception as e:
+        logger.error(f"Error downloading file {file_path}: {str(e)}", exc_info=True)
+        return jsonify({"error": f"Failed to download file: {str(e)}"}), 500
+
+
+@app.route("/api/files/<path:file_path>", methods=["DELETE"])
+def delete_workspace_file(file_path):
+    """Delete a file from the workspace directory."""
+    try:
+        workspace_root = config.workspace_root
+        # Ensure the file path is secure
+        file_path = os.path.normpath(file_path).lstrip("/")
+        full_path = workspace_root / file_path
+
+        if not full_path.exists():
+            return jsonify({"error": "File not found"}), 404
+
+        if not full_path.is_file():
+            return jsonify({"error": "Not a file"}), 400
+
+        # Delete the file
+        os.remove(full_path)
+        return jsonify({"message": "File deleted successfully"})
+    except Exception as e:
+        logger.error(f"Error deleting file {file_path}: {str(e)}", exc_info=True)
+        return jsonify({"error": f"Failed to delete file: {str(e)}"}), 500
+
+
+@app.route("/api/files", methods=["POST"])
+def upload_workspace_file():
+    """Upload a file to the workspace directory."""
+    try:
+        workspace_root = config.workspace_root
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+
+        file = request.files["file"]
+
+        if file.filename == "":
+            return jsonify({"error": "No file selected"}), 400
+
+        # Ensure filename is secure
+        filename = os.path.basename(file.filename)
+        file_path = workspace_root / filename
+
+        # Save file
+        file.save(file_path)
+
+        # Return file information
+        file_info = {
+            "name": filename,
+            "path": filename,
+            "size": os.path.getsize(file_path),
+            "modified": os.path.getmtime(file_path),
+        }
+
+        return jsonify({"file": file_info, "message": "File uploaded successfully"})
+    except Exception as e:
+        logger.error(f"Error uploading file: {str(e)}", exc_info=True)
+        return jsonify({"error": f"Failed to upload file: {str(e)}"}), 500
