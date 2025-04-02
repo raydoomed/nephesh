@@ -1,0 +1,49 @@
+[browser]
+cdp_url = ""
+chrome_instance_path = ""
+disable_security = true
+extra_chromium_args = []
+headless = false
+wss_url = ""
+
+[browser.proxy]
+password = ""
+server = ""
+username = ""
+
+[llm]
+api_key = "sk-xxxxxxxx"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+max_tokens = 4096
+model = "qwen-plus"
+stream = false
+temperature = 0
+
+[llm.vision]
+api_key = "YOUR_API_KEY"
+base_url = "https://api.anthropic.com/v1/"
+max_tokens = 8192
+model = "claude-3-7-sonnet-20250219"
+temperature = 0
+
+[sandbox]
+cpu_limit = 2
+image = "python:3.12-slim"
+memory_limit = "1g"
+network_enabled = true
+timeout = 300
+use_sandbox = false
+work_dir = "/workspace"
+
+[search]
+engine = "Baidu"
+fallback_engines = [
+    "DuckDuckGo",
+    "Baidu",
+]
+max_retries = 3
+retry_delay = 60
+
+[server]
+host = "127.0.0.1"
+port = 5172
