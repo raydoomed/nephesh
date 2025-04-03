@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenManus - History Records</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
+    <!-- Import Axios for HTTP requests -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <!-- Import Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.js"></script>
+    <!-- Import Font Awesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Import Prism for code highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+    <!-- Import Google Fonts -->
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+    <!-- Add page favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
+    <!-- Add Meta theme color -->
+    <meta name="theme-color" content="#0c1426">
+</head>
+
+<body>
+    <!-- Page loading animation -->
+    <div id="page-loader">
+        <div class="loader-content">
+            <div class="spinner">
+                <div class="bounce1"></div>
+                <div class="bounce2"></div>
+                <div class="bounce3"></div>
+            </div>
+            <p>System starting...</p>
+        </div>
+    </div>
+
+    <div id="app">
+        <!-- Navigation bar -->
+        <nav class="main-nav">
+            <div class="nav-container">
+                <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
+                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo_Gradient.png') }}' : '{{ url_for('static', filename='images/logo_black.png') }}'"
+                        alt="OpenManus Logo" class="logo">
+                    <h1>OpenManus <span class="version-badge">Beta</span></h1>
+                </a>
+
+                <div class="nav-controls">
+                    <a href="/chat" class="nav-button" title="Back to chat">
+                        <i class="fas fa-comment"></i>
+                    </a>
+
+                    <button class="theme-toggle" @click="toggleTheme"
+                        :title="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'">
+                        <i class="fas" :class="isDarkTheme ? 'fa-moon' : 'fa-sun'"></i>
+                    </button>
+
+                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank"
+                        title="Visit the GitHub project repository" class="github-nav-link">
+                        <i class="fab fa-github"></i>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main content area -->
+        <div class="history-container">
+            <!-- Back button, only shown when viewing details -->
+            <button v-if="selectedSession" @click="backToList" class="nav-button back-button" title="Back to list">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+
+            <!-- Loading status prompt -->
+            <div v-if="isLoading" class="loading-state">
+                <div class="spinner">
+                    <div class="bounce1"></div>
+                    <div class="bounce2"></div>
+                    <div class="bounce3"></div>
+                </div>
+                <p>Loading...</p>
+            </div>
+
+            <!-- Error prompt -->
+            <div v-if="hasError" class="error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>${errorMessage}</span>
+            </div>
+
+            <!-- History list page -->
+            <div v-if="!selectedSession && !isLoading" class="history-list-view">
+                <div class="history-header">
+                    <h2 class="history-title">History Session Records</h2>
+                    <div class="history-actions">
+                        <button @click="confirmClearHistory" class="secondary-btn danger-btn"
+                            :disabled="isLoading || historyList.length === 0">
+                            <i class="fas fa-trash"></i>
+                            Clear
+                        </button>
+                        <button @click="refreshHistory" class="secondary-btn" :disabled="isLoading">
+                            <i class="fas" :class="[isLoading ? 'fa-spinner fa-spin' : 'fa-sync-alt']"></i>
+                            ${isLoading ? 'Loading...' : 'Refresh'}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Empty history prompt -->
+                <div v-if="historyList.length === 0 && !hasError" class="empty-history">
+                    <i class="fas fa-history"></i>
+                    <p class="empty-history-text">No history records</p>
+                </div>
+
+                <!-- History record list -->
+                <div v-else class="history-list">
+                    <div v-for="item in historyList" :key="item.session_id" class="history-item">
+                        <div class="history-item-header">
+                            <span class="history-item-session">Session ID: ${item.session_id.substring(0, 8)}...</span>
+                            <span class="history-item-date">${formatDate(item.created_at)}</span>
+                        </div>
+                        <div class="history-item-prompt">${item.first_prompt}</div>
+                        <div class="history-item-meta">
+                            <span>${item.prompt_count} instructions</span>
+                            <div class="history-item-actions">
+                                <button @click.stop="viewSessionDetail(item.session_id)" class="text-btn">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                                <button @click.stop="confirmDeleteSession(item.session_id)"
+                                    class="text-btn text-danger">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session details page -->
+            <div v-if="selectedSession && !isLoading" class="history-detail-view">
+                <div class="history-detail">
+                    <div class="history-detail-header">
+                        <h3 class="history-detail-title">Session Details</h3>
+                        <div class="history-detail-session">Session ID: ${sessionDetail.session_id}</div>
+                        <div class="history-detail-date">
+                            Start time: ${formatDate(sessionDetail.created_at)}
+                            <span v-if="sessionDetail.completed_at">
+                                | End time: ${formatDate(sessionDetail.completed_at)}
+                            </span>
+                        </div>
+                        <div class="history-detail-actions">
+                            <div class="export-dropdown">
+                                <button class="secondary-btn">
+                                    <i class="fas fa-download"></i> Export
+                                </button>
+                                <div class="export-dropdown-content">
+                                    <button @click="exportSession(sessionDetail.session_id, 'json')"
+                                        class="export-option">
+                                        <i class="fas fa-file-code"></i> JSON
+                                    </button>
+                                    <button @click="exportSession(sessionDetail.session_id, 'txt')"
+                                        class="export-option">
+                                        <i class="fas fa-file-alt"></i> TXT
+                                    </button>
+                                    <button @click="exportSession(sessionDetail.session_id, 'md')"
+                                        class="export-option">
+                                        <i class="fas fa-file-alt"></i> Markdown
+                                    </button>
+                                    <button @click="exportSession(sessionDetail.session_id, 'pdf')"
+                                        class="export-option"
+                                        title="Export PDF using system printer (e.g. Microsoft Print to PDF)">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User prompt list -->
+                    <h4>User Instructions (${sessionDetail.prompts.length})</h4>
+                    <div v-for="(prompt, index) in sessionDetail.prompts" :key="'p-'+index"
+                        class="history-message user">
+                        <div class="history-message-role">User</div>
+                        <div class="history-message-time">${formatDate(prompt.time)}</div>
+                        <div class="history-message-content">${prompt.content}</div>
+                    </div>
+
+                    <!-- Message record -->
+                    <h4>Full conversation record (${sessionDetail.messages.length})</h4>
+                    <div v-for="(message, index) in sessionDetail.messages" :key="'m-'+index"
+                        :class="['history-message', message.role]">
+                        <div class="history-message-role">
+                            ${message.role === 'assistant' ? 'Manus' :
+                            message.role === 'user' ? 'User' :
+                            message.role === 'tool' ? 'Tool' : message.role}
+                        </div>
+                        <div class="history-message-time">${formatTime(message.time)}</div>
+                        <div class="history-message-content" v-html="formatMessage(message.content)"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/history.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-html.min.js"></script>
+</body>
+
+</html>

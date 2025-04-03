@@ -451,6 +451,7 @@ const app = Vue.createApp({
                 // Reset panel state
                 this.isAvailableToolsOpen = false;
                 this.isUsedToolsOpen = false;
+                this.currentToolInUse = null;
 
                 // Get available tools list
                 this.fetchAvailableTools();

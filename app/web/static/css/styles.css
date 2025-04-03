@@ -51,6 +51,9 @@
     --transition-normal: 0.3s;
     --transition-slow: 0.5s;
     --warning-color: #f6ad55;
+    /* Navigation button color */
+    --nav-button-bg: rgba(255, 255, 255, 0.1);
+    --nav-button-hover-bg: rgba(255, 255, 255, 0.2);
 }
 
 body {

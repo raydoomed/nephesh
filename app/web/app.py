@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -32,6 +33,142 @@ if server_config:
 sessions = {}
 message_queues = {}
 message_counters = {}  # Store the number of messages processed for each session
+# Store session history with timestamp, user input and full message history
+session_history = {}  # To store historical session data
+
+# Create history directory if not exists
+HISTORY_DIR = os.path.join(str(config.workspace_root), "history")
+if not os.path.exists(HISTORY_DIR):
+    os.makedirs(HISTORY_DIR)
+
+
+# Load history data
+def load_history_data():
+    global session_history
+    if os.path.exists(HISTORY_DIR):
+        for filename in os.listdir(HISTORY_DIR):
+            if filename.endswith(".json"):
+                session_id = filename[:-5]  # Remove .json suffix
+                try:
+                    with open(
+                        os.path.join(HISTORY_DIR, filename), "r", encoding="utf-8"
+                    ) as f:
+                        session_data = json.load(f)
+
+                        # Filter out history records with no actual content
+                        if (
+                            not session_data.get("prompts")
+                            or len(session_data.get("prompts", [])) == 0
+                        ) and (
+                            not session_data.get("messages")
+                            or len(session_data.get("messages", [])) == 0
+                        ):
+                            # Delete history files with no actual content
+                            try:
+                                os.remove(os.path.join(HISTORY_DIR, filename))
+                                logger.info(f"Deleted empty history file: {filename}")
+                                continue
+                            except Exception as e:
+                                logger.error(
+                                    f"Unable to delete empty history file {filename}: {str(e)}"
+                                )
+
+                        session_history[session_id] = session_data
+                except Exception as e:
+                    logger.error(f"Unable to load history file {filename}: {str(e)}")
+    logger.info(f"Loaded {len(session_history)} history records")
+
+
+# Save history to file
+def save_history(session_id):
+    if session_id in session_history:
+        try:
+            history_file = os.path.join(HISTORY_DIR, f"{session_id}.json")
+            with open(history_file, "w", encoding="utf-8") as f:
+                json.dump(session_history[session_id], f, ensure_ascii=False, indent=2)
+            logger.info(f"Session history saved: {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to save history {session_id}: {str(e)}")
+
+
+# Load existing history data
+load_history_data()
+
+
+# Periodic cleanup of empty session records
+def cleanup_empty_sessions():
+    """Clean up empty session records in memory"""
+    global session_history
+    try:
+        sessions_to_remove = []
+        # Look for empty sessions
+        for session_id, data in session_history.items():
+            # Check if it's a newly created empty session
+            if "is_new" in data:
+                # Only clean up inactive sessions
+                if session_id not in sessions or sessions[session_id] is None:
+                    sessions_to_remove.append(session_id)
+                    continue
+
+            # Check if the session has actual message content
+            if (not data.get("prompts") or len(data.get("prompts", [])) == 0) and (
+                not data.get("messages") or len(data.get("messages", [])) == 0
+            ):
+                # Only clean up inactive sessions
+                if session_id not in sessions or sessions[session_id] is None:
+                    sessions_to_remove.append(session_id)
+
+        # Delete empty sessions
+        for session_id in sessions_to_remove:
+            if session_id in session_history:
+                del session_history[session_id]
+                logger.info(
+                    f"Periodic cleanup: Removed empty session from memory: {session_id}"
+                )
+
+                # Delete corresponding files
+                try:
+                    history_file = os.path.join(HISTORY_DIR, f"{session_id}.json")
+                    if os.path.exists(history_file):
+                        os.remove(history_file)
+                        logger.info(
+                            f"Periodic cleanup: Deleted empty session history file: {session_id}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Periodic cleanup: Failed to delete empty session history file {session_id}: {str(e)}"
+                    )
+    except Exception as e:
+        logger.error(
+            f"Error during periodic cleanup of empty sessions: {str(e)}", exc_info=True
+        )
+
+
+# Start cleanup thread
+def start_cleanup_thread():
+    """Start background thread for periodic cleanup of empty sessions"""
+
+    def cleanup_worker():
+        while True:
+            try:
+                # Clean up every 5 minutes
+                time.sleep(300)
+                cleanup_empty_sessions()
+            except Exception as e:
+                logger.error(f"Cleanup thread error: {str(e)}", exc_info=True)
+                # Continue running even if error occurs
+                time.sleep(60)
+
+    thread = threading.Thread(target=cleanup_worker)
+    thread.daemon = (
+        True  # Set as daemon thread, automatically terminate when main program exits
+    )
+    thread.start()
+    logger.info("Empty session cleanup thread started")
+
+
+# Start cleanup thread
+start_cleanup_thread()
 
 
 def async_action(f):
@@ -52,6 +189,12 @@ def chat_page():
     return render_template("chat.html")
 
 
+@app.route("/history")
+def history_page():
+    """Display the history page with all session records"""
+    return render_template("history.html")
+
+
 @app.route("/api/session", methods=["POST"])
 def create_session():
     from app.config import config
@@ -65,6 +208,16 @@ def create_session():
     sessions[session_id] = None  # Will be initialized on first request
     message_queues[session_id] = queue.Queue()
     message_counters[session_id] = 0
+
+    # Initialize session history in memory only, don't save to file yet
+    session_history[session_id] = {
+        "session_id": session_id,
+        "created_at": datetime.datetime.now().isoformat(),
+        "prompts": [],
+        "messages": [],
+        "is_new": True,  # Mark as new session
+    }
+    # Only save history when there are actual messages
 
     logger.info(f"Session {session_id} created successfully")
     return jsonify({"session_id": session_id})
@@ -133,6 +286,40 @@ async def chat():
         config.reload_config()
         sessions[session_id] = Manus()
 
+        # Initialize history record for this session if not exists
+        if session_id not in session_history:
+            session_history[session_id] = {
+                "session_id": session_id,
+                "created_at": datetime.datetime.now().isoformat(),
+                "prompts": [],
+                "messages": [],
+                "is_new": True,  # Mark as new session
+            }
+            # Don't save empty history record immediately
+
+    # Add prompt to history
+    if session_id in session_history:
+        # If this is the first message, remove is_new flag
+        if "is_new" in session_history[session_id]:
+            del session_history[session_id]["is_new"]
+            logger.info(
+                f"Session {session_id} received first message, removing new session flag"
+            )
+
+        # Add user prompt to history
+        current_time = datetime.datetime.now().isoformat()
+        session_history[session_id]["prompts"].append(
+            {"time": current_time, "content": prompt}
+        )
+
+        # Add user message to message history
+        user_message = {"role": "user", "content": prompt, "time": time.time()}
+        session_history[session_id]["messages"].append(user_message)
+
+        # Save history - now only when there are actual messages
+        save_history(session_id)
+        logger.info(f"User message saved to history: {session_id}")
+
     agent = sessions[session_id]
     message_queue = message_queues[session_id]
 
@@ -193,6 +380,161 @@ async def chat():
     return jsonify({"status": "processing", "session_id": session_id})
 
 
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    """Get list of all historical sessions"""
+    history_list = []
+
+    # First clean up empty session records in memory
+    sessions_to_remove = []
+    for session_id, data in session_history.items():
+        # Check if it's a newly created empty session
+        if "is_new" in data:
+            # Mark sessions with no actual content for later deletion
+            if session_id not in sessions or sessions[session_id] is None:
+                # If there's no active session instance, it's safe to delete
+                sessions_to_remove.append(session_id)
+                continue
+
+        # Check if the session has actual message content
+        if (not data.get("prompts") or len(data.get("prompts", [])) == 0) and (
+            not data.get("messages") or len(data.get("messages", [])) == 0
+        ):
+            # Mark sessions with no actual content for later deletion
+            if session_id not in sessions or sessions[session_id] is None:
+                # If there's no active session instance, it's safe to delete
+                sessions_to_remove.append(session_id)
+
+    # Remove empty sessions from memory
+    for session_id in sessions_to_remove:
+        if session_id in session_history:
+            del session_history[session_id]
+            logger.info(f"Removed empty session from memory: {session_id}")
+
+            # Delete corresponding file (if exists)
+            try:
+                history_file = os.path.join(HISTORY_DIR, f"{session_id}.json")
+                if os.path.exists(history_file):
+                    os.remove(history_file)
+                    logger.info(f"Deleted empty session history file: {session_id}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to delete empty session history file {session_id}: {str(e)}"
+                )
+
+    # Collect valid history records
+    for session_id, data in session_history.items():
+        # Ensure all necessary fields exist
+        if not isinstance(data, dict):
+            logger.warning(f"Invalid session history format: {session_id}")
+            continue
+
+        # Skip sessions with is_new flag
+        if "is_new" in data:
+            continue
+
+        # Double check if the session has actual message content
+        if (not data.get("prompts") or len(data.get("prompts", [])) == 0) and (
+            not data.get("messages") or len(data.get("messages", [])) == 0
+        ):
+            # Skip sessions with no actual content
+            continue
+
+        # Get first prompt or show default message
+        first_prompt = "No prompt content"
+        if (
+            "prompts" in data
+            and isinstance(data["prompts"], list)
+            and len(data["prompts"]) > 0
+        ):
+            prompt_data = data["prompts"][0]
+            if isinstance(prompt_data, dict) and "content" in prompt_data:
+                first_prompt = prompt_data["content"]
+
+        # Create session summary
+        session_summary = {
+            "session_id": session_id,
+            "created_at": data.get("created_at", "Unknown time"),
+            "first_prompt": first_prompt,
+            "prompt_count": len(data.get("prompts", [])),
+            "completed": "completed_at" in data,
+        }
+
+        history_list.append(session_summary)
+
+    # Sort by creation time (newest first)
+    history_list.sort(key=lambda x: x["created_at"], reverse=True)
+
+    return jsonify({"history": history_list})
+
+
+@app.route("/api/history/<session_id>", methods=["GET"])
+def get_session_history(session_id):
+    """Get detailed history for a specific session"""
+    if session_id not in session_history:
+        return jsonify({"error": "Session history not found"}), 404
+
+    # Return complete session history data
+    session_data = session_history[session_id]
+
+    # Ensure session ID exists in the data
+    if isinstance(session_data, dict) and "session_id" not in session_data:
+        session_data["session_id"] = session_id
+
+    return jsonify(session_data)
+
+
+@app.route("/api/history/<session_id>", methods=["DELETE"])
+def delete_session_history(session_id):
+    """Delete a specific session history"""
+    if session_id not in session_history:
+        return jsonify({"error": "Session history not found"}), 404
+
+    try:
+        # Delete from memory
+        del session_history[session_id]
+
+        # Delete the corresponding file
+        history_file = os.path.join(HISTORY_DIR, f"{session_id}.json")
+        if os.path.exists(history_file):
+            os.remove(history_file)
+            logger.info(f"Deleted session history file: {session_id}")
+
+        return jsonify(
+            {"success": True, "message": "Session history deleted successfully"}
+        )
+    except Exception as e:
+        logger.error(f"Failed to delete session history {session_id}: {str(e)}")
+        return jsonify({"error": f"Failed to delete session history: {str(e)}"}), 500
+
+
+@app.route("/api/history", methods=["DELETE"])
+def clear_all_history():
+    """Clear all history records"""
+    try:
+        # Clear memory
+        session_history.clear()
+
+        # Delete all history files
+        if os.path.exists(HISTORY_DIR):
+            for filename in os.listdir(HISTORY_DIR):
+                if filename.endswith(".json"):
+                    try:
+                        os.remove(os.path.join(HISTORY_DIR, filename))
+                        logger.info(f"Deleted history file: {filename}")
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to delete history file {filename}: {str(e)}"
+                        )
+
+        return jsonify(
+            {"success": True, "message": "All history records cleared successfully"}
+        )
+    except Exception as e:
+        logger.error(f"Failed to clear history records: {str(e)}")
+        return jsonify({"error": f"Failed to clear history records: {str(e)}"}), 500
+
+
 @app.route("/api/messages/<session_id>", methods=["GET"])
 def get_messages(session_id):
     if session_id not in sessions or sessions[session_id] is None:
@@ -202,33 +544,78 @@ def get_messages(session_id):
     message_queue = message_queues[session_id]
     current_counter = message_counters[session_id]
 
-    # Check for error messages
-    error_messages = []
+    # Message processing
+    new_messages = []
+    completed = False
+
+    # Process messages in the queue (errors or completion markers)
+    queue_messages = []
     while not message_queue.empty():
         msg = message_queue.get()
-        if msg is None:  # Processing complete marker
-            return jsonify({"messages": error_messages, "completed": True})
-        error_messages.append(msg)
+        if msg is None:  # Handle completion marker
+            completed = True
+            break
+        queue_messages.append(msg)
+        new_messages.append(msg)
 
-    # Return error messages immediately if any
-    if error_messages:
-        return jsonify({"messages": error_messages, "completed": False})
+    # Save queue messages to history
+    if queue_messages and session_id in session_history:
+        for msg in queue_messages:
+            # Check if message already exists
+            if not any(
+                m.get("content") == msg.get("content")
+                and m.get("role") == msg.get("role")
+                for m in session_history[session_id]["messages"]
+            ):
+                session_history[session_id]["messages"].append(msg)
+        save_history(session_id)
+        logger.info(f"Saved {len(queue_messages)} queue messages to history")
 
-    # Get new messages from agent memory
-    all_messages = agent.messages
-    new_messages = []
+    # If there are queue messages, return them immediately
+    if new_messages:
+        return jsonify({"messages": new_messages, "completed": completed})
 
-    if len(all_messages) > current_counter:
-        for i in range(current_counter, len(all_messages)):
-            msg = all_messages[i]
+    # Get new messages from agent
+    agent_messages = []
+    if len(agent.messages) > current_counter:
+        for i in range(current_counter, len(agent.messages)):
+            msg = agent.messages[i]
             formatted_msg = _format_message(msg)
             if formatted_msg:
+                agent_messages.append(formatted_msg)
                 new_messages.append(formatted_msg)
 
-        # Update processed message count
-        message_counters[session_id] = len(all_messages)
+        # Update message counter
+        message_counters[session_id] = len(agent.messages)
 
-    completed = agent.state.value not in ["RUNNING", "THINKING", "ACTING"]
+    # Save agent messages to history
+    if agent_messages and session_id in session_history:
+        for msg in agent_messages:
+            # Check if message already exists
+            if not any(
+                m.get("content") == msg.get("content")
+                and m.get("role") == msg.get("role")
+                for m in session_history[session_id]["messages"]
+            ):
+                session_history[session_id]["messages"].append(msg)
+        save_history(session_id)
+        logger.info(f"Saved {len(agent_messages)} agent messages to history")
+
+    # Check if completed
+    if not completed:
+        completed = agent.state.value not in ["RUNNING", "THINKING", "ACTING"]
+
+        # If task is completed, ensure completion status is saved
+        if (
+            completed
+            and session_id in session_history
+            and "completed_at" not in session_history[session_id]
+        ):
+            session_history[session_id][
+                "completed_at"
+            ] = datetime.datetime.now().isoformat()
+            save_history(session_id)
+            logger.info(f"Task completed, saved session completion time: {session_id}")
 
     return jsonify({"messages": new_messages, "completed": completed})
 
@@ -415,6 +802,50 @@ async def terminate_session(session_id):
             success = False  # Mark termination as failed
             return jsonify({"error": f"Failed to clean up resources: {str(e)}"}), 500
 
+    # Finalize history record when session is terminated
+    try:
+        if session_id in session_history:
+            # Check if session has actual content
+            session_data = session_history[session_id]
+            has_content = (
+                session_data.get("prompts") and len(session_data.get("prompts", [])) > 0
+            ) or (
+                session_data.get("messages")
+                and len(session_data.get("messages", [])) > 0
+            )
+
+            if has_content:
+                # Only save termination record for sessions with actual content
+                logger.info(f"Saving history for session {session_id}")
+                session_history[session_id][
+                    "completed_at"
+                ] = datetime.datetime.now().isoformat()
+                # Ensure save operation is performed
+                save_history(session_id)
+                logger.info(f"History for session {session_id} has been saved")
+            else:
+                # For empty sessions, remove directly from history
+                logger.info(
+                    f"Session {session_id} has no actual content, removing from history"
+                )
+                if session_id in session_history:
+                    del session_history[session_id]
+
+                # Delete corresponding file (if exists)
+                try:
+                    history_file = os.path.join(HISTORY_DIR, f"{session_id}.json")
+                    if os.path.exists(history_file):
+                        os.remove(history_file)
+                        logger.info(f"Deleted empty session history file: {session_id}")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to delete empty session history file {session_id}: {str(e)}"
+                    )
+    except Exception as e:
+        logger.error(
+            f"Error saving history for terminated session: {str(e)}", exc_info=True
+        )
+
     # Add terminate tool message to message queue
     try:
         if session_id in message_queues:
@@ -424,7 +855,24 @@ async def terminate_session(session_id):
                 name="terminate",
                 content=f"Observed output of cmd terminate executed: The interaction has been completed with status: {status_message}",
             )
-            message_queues[session_id].put(_format_message(terminate_message))
+            formatted_msg = _format_message(terminate_message)
+            message_queues[session_id].put(formatted_msg)
+
+            # Also add termination message to history record - only if there is actual content
+            if session_id in session_history and formatted_msg:
+                # Check again if session has actual content
+                session_data = session_history[session_id]
+                has_content = (
+                    session_data.get("prompts")
+                    and len(session_data.get("prompts", [])) > 0
+                ) or (
+                    session_data.get("messages")
+                    and len(session_data.get("messages", [])) > 0
+                )
+
+                if has_content:
+                    session_history[session_id]["messages"].append(formatted_msg)
+                    save_history(session_id)
     except Exception as e:
         logger.error(f"Error adding terminate message to queue: {e}", exc_info=True)
 
@@ -673,3 +1121,109 @@ def upload_workspace_file():
     except Exception as e:
         logger.error(f"Error uploading file: {str(e)}", exc_info=True)
         return jsonify({"error": f"Failed to upload file: {str(e)}"}), 500
+
+
+@app.route("/api/history/<session_id>/export/<format>", methods=["GET"])
+def export_session(session_id, format):
+    """Export session record in specified format"""
+    if session_id not in session_history:
+        return jsonify({"error": "Session record not found"}), 404
+
+    session_data = session_history[session_id]
+
+    # Choose export method based on format
+    if format == "json":
+        response = jsonify(session_data)
+        response.headers[
+            "Content-Disposition"
+        ] = f"attachment; filename=session-{session_id[:8]}.json"
+        return response
+
+    elif format == "txt":
+        content = generate_text_export(session_data)
+        return (
+            content,
+            200,
+            {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Disposition": f"attachment; filename=session-{session_id[:8]}.txt",
+            },
+        )
+
+    elif format == "md":
+        content = generate_markdown_export(session_data)
+        return (
+            content,
+            200,
+            {
+                "Content-Type": "text/markdown; charset=utf-8",
+                "Content-Disposition": f"attachment; filename=session-{session_id[:8]}.md",
+            },
+        )
+
+    else:
+        return jsonify({"error": "Unsupported export format"}), 400
+
+
+def generate_text_export(session_data):
+    """Generate text format of session record"""
+    lines = []
+
+    # Basic session information
+    session_id = session_data.get("session_id", "Unknown")
+    created_at = session_data.get("created_at", "Unknown time")
+    lines.append(f"OpenManus Session Record")
+    lines.append(f"Session ID: {session_id}")
+    lines.append(f"Created at: {created_at}")
+    lines.append("-" * 50)
+
+    # Add message content
+    messages = session_data.get("messages", [])
+    for msg in messages:
+        role = msg.get("role", "")
+        if role == "user":
+            lines.append(f"\nUser: {msg.get('content', '')}")
+        elif role == "assistant":
+            lines.append(f"\nAssistant: {msg.get('content', '')}")
+        elif role == "tool":
+            tool_name = msg.get("name", "Unknown tool")
+            lines.append(f"\nTool({tool_name}): {msg.get('content', '')}")
+
+    return "\n".join(lines)
+
+
+def generate_markdown_export(session_data):
+    """Generate Markdown format of session record"""
+    lines = []
+
+    # Basic session information
+    session_id = session_data.get("session_id", "Unknown")
+    created_at = session_data.get("created_at", "Unknown time")
+    lines.append("# OpenManus Session Record")
+    lines.append(f"**Session ID**: `{session_id}`")
+    lines.append(f"**Created at**: {created_at}")
+    lines.append("")
+
+    # Add message content
+    messages = session_data.get("messages", [])
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+
+        if role == "user":
+            lines.append("## User")
+            lines.append(content)
+            lines.append("")
+        elif role == "assistant":
+            lines.append("## Assistant")
+            lines.append(content)
+            lines.append("")
+        elif role == "tool":
+            tool_name = msg.get("name", "Unknown tool")
+            lines.append(f"## Tool ({tool_name})")
+            lines.append("```")
+            lines.append(content)
+            lines.append("```")
+            lines.append("")
+
+    return "\n".join(lines)

@@ -1,0 +1,680 @@
+/* Styles specific to history page */
+
+/* Dark mode variable definitions */
+:root {
+    --border-gradient: linear-gradient(135deg, #4a00e0, #8e2de2, #e94057);
+    --button-gradient: linear-gradient(135deg, #6e42f5, #e94057);
+    --hover-gradient: linear-gradient(135deg, #7c52ff, #ff5e7d);
+    --icon-gradient: linear-gradient(135deg, #5e17f7, #ff3a6b);
+    --accent-color: #4361ee;
+    --user-msg-bg: rgba(67, 97, 238, 0.1);
+    --user-msg-accent: #4361ee;
+    --bot-msg-bg: rgba(111, 63, 245, 0.1);
+    --bot-msg-accent: #6f3ff5;
+    --tool-msg-bg: rgba(79, 209, 197, 0.1);
+    --tool-msg-accent: #4fd1c5;
+    --muted-text: #718096;
+    --card-bg: #ffffff;
+    --border-color: #e2e8f0;
+    --danger-color: #e53e3e;
+    --danger-hover: #c53030;
+}
+
+/* Dark mode style adjustments */
+.dark-theme {
+    --card-bg: #2d3748;
+    --muted-text: #a0aec0;
+    --border-color: #4a5568;
+}
+
+.dark-theme body {
+    background-color: #1a202c;
+    color: #f7fafc;
+}
+
+.dark-theme #page-loader {
+    background-color: #1a202c;
+}
+
+.dark-theme .loader-content p {
+    color: #f7fafc;
+}
+
+.dark-theme .history-container {
+    background-color: #1a202c;
+    color: #f7fafc;
+}
+
+.dark-theme .history-item {
+    background-color: #2d3748;
+    border-left: 4px solid var(--accent-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .history-item:hover {
+    background-color: #384457;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.dark-theme .history-item-prompt {
+    color: #f7fafc;
+}
+
+.dark-theme .history-title {
+    color: #f7fafc;
+}
+
+.dark-theme .history-detail {
+    background-color: #2d3748;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .back-button {
+    background: var(--button-gradient);
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: gradientShift 5s ease infinite;
+    background-size: 200% 200%;
+}
+
+.dark-theme .back-button:hover {
+    background: var(--hover-gradient);
+    box-shadow: 0 4px 12px rgba(110, 66, 245, 0.5);
+    transform: translateY(-2px);
+}
+
+.dark-theme .back-button i {
+    font-size: 12px;
+}
+
+.dark-theme .history-message {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .history-message.user {
+    background-color: rgba(67, 97, 238, 0.15);
+    border-left: 4px solid var(--user-msg-accent);
+}
+
+.dark-theme .history-message.assistant {
+    background-color: rgba(111, 63, 245, 0.15);
+    border-left: 4px solid var(--bot-msg-accent);
+}
+
+.dark-theme .history-message.tool {
+    background-color: rgba(79, 209, 197, 0.15);
+    border-left: 4px solid var(--tool-msg-accent);
+}
+
+.dark-theme .history-message-role,
+.dark-theme .history-message-content {
+    color: #f7fafc;
+}
+
+.dark-theme .history-detail-header {
+    border-bottom: 1px solid #4a5568;
+}
+
+.dark-theme .history-detail-title {
+    color: #f7fafc;
+}
+
+.dark-theme .history-detail-session,
+.dark-theme .history-detail-date,
+.dark-theme .history-item-session,
+.dark-theme .history-item-date,
+.dark-theme .history-item-meta,
+.dark-theme .history-message-time {
+    color: var(--muted-text);
+}
+
+.dark-theme h4 {
+    color: #f7fafc;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+    margin-top: 20px;
+    margin-bottom: 16px;
+}
+
+.dark-theme .secondary-btn {
+    background: linear-gradient(135deg, rgba(110, 66, 245, 0.2), rgba(233, 64, 87, 0.2));
+    border: 1px solid transparent;
+    border-image: var(--border-gradient);
+    border-image-slice: 1;
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.dark-theme .secondary-btn:hover {
+    background: linear-gradient(135deg, rgba(124, 82, 255, 0.3), rgba(255, 94, 125, 0.3));
+    box-shadow: 0 4px 12px rgba(110, 66, 245, 0.3);
+    transform: translateY(-2px);
+}
+
+/* History container */
+.history-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    margin-top: 70px;
+    min-height: calc(100vh - 70px);
+    /* 增加顶部间距，避免被导航栏遮挡 */
+}
+
+.history-header {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.history-list {
+    margin-bottom: 30px;
+}
+
+.history-item {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 4px solid var(--accent-color);
+}
+
+.history-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.history-item-session {
+    font-size: 0.8rem;
+    color: var(--muted-text);
+}
+
+.history-item-date {
+    font-size: 0.8rem;
+    color: var(--muted-text);
+}
+
+.history-item-prompt {
+    font-weight: 500;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.history-item-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--muted-text);
+    align-items: center;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.text-btn:hover {
+    background-color: rgba(67, 97, 238, 0.1);
+}
+
+.text-danger {
+    color: var(--danger-color);
+}
+
+.text-danger:hover {
+    background-color: rgba(229, 62, 62, 0.1);
+}
+
+.danger-btn {
+    color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.danger-btn:hover {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+/* Session detail styles */
+.history-detail {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.history-detail-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+
+.history-detail-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.history-detail-session {
+    font-size: 0.8rem;
+    color: var(--muted-text);
+}
+
+.history-detail-date {
+    font-size: 0.8rem;
+    color: var(--muted-text);
+    margin-bottom: 10px;
+}
+
+.history-detail-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+/* Export dropdown menu */
+.export-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.export-dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: var(--card-bg);
+    min-width: 160px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.export-dropdown:hover .export-dropdown-content {
+    display: block;
+}
+
+.export-option {
+    width: 100%;
+    text-align: left;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.export-option:hover {
+    background-color: rgba(67, 97, 238, 0.1);
+}
+
+.export-option i {
+    width: 20px;
+    text-align: center;
+}
+
+/* Dark mode style adjustments */
+.dark-theme .export-dropdown-content {
+    background-color: #2d3748;
+    border: 1px solid #4a5568;
+}
+
+.dark-theme .export-option {
+    color: #f7fafc;
+}
+
+.dark-theme .export-option:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Message styles */
+.history-message {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    position: relative;
+}
+
+.history-message.user {
+    background-color: var(--user-msg-bg);
+    border-left: 4px solid var(--user-msg-accent);
+}
+
+.history-message.assistant {
+    background-color: var(--bot-msg-bg);
+    border-left: 4px solid var(--bot-msg-accent);
+}
+
+.history-message.tool {
+    background-color: var(--tool-msg-bg);
+    border-left: 4px solid var(--tool-msg-accent);
+}
+
+.history-message-role {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.history-message-time {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 0.8rem;
+    color: var(--muted-text);
+}
+
+.history-message-content {
+    white-space: pre-wrap;
+}
+
+/* Empty history prompt */
+.empty-history {
+    text-align: center;
+    padding: 50px 0;
+    color: var(--muted-text);
+}
+
+.empty-history i {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    opacity: 0.6;
+}
+
+.empty-history-text {
+    font-size: 1.2rem;
+}
+
+/* Back button styles */
+.back-button {
+    position: absolute;
+    top: 75px;
+    left: 20px;
+    margin-bottom: 20px;
+    z-index: 10;
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 12px;
+}
+
+.back-button:hover {
+    opacity: 0.8;
+}
+
+.back-button i {
+    margin-right: 0;
+    font-size: 12px;
+}
+
+/* Loading state styles */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 0;
+    color: var(--muted-text);
+}
+
+.loading-state p {
+    margin-top: 15px;
+    font-size: 1rem;
+}
+
+/* Error message styles */
+.error-message {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-left: 4px solid #ff5252;
+    color: #ff5252;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.error-message i {
+    font-size: 1.5rem;
+    margin-right: 10px;
+}
+
+/* Add gradient animation */
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Mobile device responsive adjustments */
+@media (max-width: 768px) {
+    .history-container {
+        padding: 15px;
+        margin-top: 60px;
+    }
+
+    .history-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .history-item-date {
+        margin-top: 5px;
+    }
+}
+
+/* Adjust navigation button size and style */
+.nav-button,
+.theme-toggle,
+.github-nav-link {
+    width: 24px !important;
+    height: 24px !important;
+}
+
+.nav-button i,
+.theme-toggle i,
+.github-nav-link i {
+    font-size: 12px !important;
+}
+
+/* Navigation button styles */
+.nav-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    color: var(--text-color);
+    background-color: var(--nav-button-bg);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 0 4px;
+    text-decoration: none;
+}
+
+.nav-button:hover {
+    background-color: var(--nav-button-hover-bg);
+    transform: translateY(-2px);
+}
+
+.nav-button i {
+    font-size: 12px;
+}
+
+.dark-theme .nav-button {
+    background: var(--button-gradient);
+    color: white;
+    box-shadow: 0 4px 10px rgba(74, 0, 224, 0.3);
+}
+
+.dark-theme .nav-button:hover {
+    background: var(--hover-gradient);
+    transform: translateY(-2px);
+}
+
+/* Add confirmation dialog styles */
+.confirm-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.confirm-dialog {
+    width: 100%;
+    max-width: 400px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    background-color: #2d3748;
+}
+
+.confirm-dialog-header {
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #6e42f5, #e94057);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.confirm-dialog-header span {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.close-dialog-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.close-dialog-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.confirm-dialog-content {
+    padding: 20px;
+    color: #f7fafc;
+    text-align: center;
+}
+
+.confirm-dialog-footer {
+    padding: 15px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid #4a5568;
+}
+
+/* Notification styles */
+.center-notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    border-radius: 8px;
+    z-index: 1200;
+    background-color: #2d3748;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    min-width: 280px;
+}
+
+.center-notification.success {
+    border-left: 4px solid #48bb78;
+}
+
+.center-notification.error {
+    border-left: 4px solid #e53e3e;
+}
+
+.center-notification.warning {
+    border-left: 4px solid #f6ad55;
+}
+
+.center-notification-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.notification-icon {
+    font-size: 18px;
+}
+
+.success .notification-icon {
+    color: #48bb78;
+}
+
+.error .notification-icon {
+    color: #e53e3e;
+}
+
+.warning .notification-icon {
+    color: #f6ad55;
+}
+
+.notification-message {
+    color: #f7fafc;
+    font-size: 14px;
+}

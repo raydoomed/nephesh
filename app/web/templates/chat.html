@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenManus - AI Intelligent Assistant</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
     <!-- Import Axios for HTTP requests -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <!-- Import Vue.js -->
@@ -70,6 +71,11 @@
                         <span class="status-dot"></span>
                         <span class="status-text">${statusText}</span>
                     </div>
+
+                    <!-- Add history button -->
+                    <a href="/history" class="nav-button" title="历史记录">
+                        <i class="fas fa-history"></i>
+                    </a>
 
                     <button class="theme-toggle" @click="toggleTheme"
                         :title="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'">
