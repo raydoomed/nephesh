@@ -1935,7 +1935,7 @@ body {
     display: flex;
     font-size: var(--font-size-sm);
     gap: var(--spacing-2);
-    max-width: 300px;
+    max-width: 500px;
     overflow: hidden;
     padding: var(--spacing-1) var(--spacing-2);
     text-overflow: ellipsis;
