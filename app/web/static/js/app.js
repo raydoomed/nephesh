@@ -673,8 +673,14 @@ const app = Vue.createApp({
         // Stop polling
         stopPolling() {
             if (this.pollingInterval) {
-                clearInterval(this.pollingInterval);
+                // Do not clear polling immediately
+                const intervalToStop = this.pollingInterval;
                 this.pollingInterval = null;
+
+                // Delay stopping the polling to give the last message a chance to arrive
+                setTimeout(() => {
+                    clearInterval(intervalToStop);
+                }, 3000); // 3 seconds delay to ensure the last one or two polls can complete
             }
         },
 

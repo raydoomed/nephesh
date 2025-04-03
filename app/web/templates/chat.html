@@ -174,7 +174,7 @@
                     <div class="tools-panel">
                         <ul class="tools-list" v-if="availableTools.length > 0">
                             <li v-for="tool in availableTools" :key="tool.name" class="tool-item">
-                                <div class="tool-icon"><i class="fas fa-cog"></i></div>
+                                <div class="tool-icon"><i class="fas fa-tools"></i></div>
                                 <div class="tool-info">
                                     <div class="tool-name">${tool.name}</div>
                                     <div class="tool-description">${tool.description}</div>
@@ -220,7 +220,6 @@
                                 :class="['message', message.role, message.class]">
                                 <div class="message-header">
                                     <div class="message-role">
-                                        <i class="fas fa-robot"></i>
                                         <span>Manus</span>
                                     </div>
                                     <span class="message-time">${formatTime(message.time)}</span>
@@ -230,10 +229,13 @@
 
                             <!-- Agent message loading status -->
                             <div v-if="isProcessing" class="processing-indicator">
-                                <div class="typing-indicator">
-                                    <span></span><span></span><span></span>
+                                <div class="thinking-container">
+                                    <div class="manus-eyes-animation">
+                                        <div class="manus-eye"></div>
+                                        <div class="manus-eye"></div>
+                                    </div>
+                                    <span class="thinking-text">Manus is thinking...</span>
                                 </div>
-                                <p>Manus is thinking...</p>
                             </div>
                         </div>
 
@@ -241,11 +243,11 @@
                         <div class="agent-input-area">
                             <div class="input-container">
                                 <textarea v-model="userInput" @keydown.enter.ctrl="sendMessage"
-                                    :disabled="isProcessing || !isConnected" placeholder="输入指令，Ctrl+Enter发送"
-                                    ref="userInputArea"></textarea>
+                                    :disabled="isProcessing || !isConnected"
+                                    placeholder="Enter command, Ctrl+Enter to send" ref="userInputArea"></textarea>
 
                                 <div class="input-actions">
-                                    <button class="action-btn" title="上传文件" @click.stop="openUploadModal">
+                                    <button class="action-btn" title="Upload File" @click.stop="openUploadModal">
                                         <i class="fas fa-paperclip"></i>
                                     </button>
                                     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none">
@@ -563,7 +565,7 @@
         </transition>
 
         <!-- Add floating control buttons -->
-        <!-- 添加渐变效果切换按钮 -->
+        <!-- Add gradient effect toggle button -->
         <div class="gradient-toggle" @click="toggleGradientEffect" :class="{'gradient-active': gradientEffectEnabled}"
             style="display:none;" id="gradient-toggle-btn">
             <i class="fas fa-paint-brush"></i>
