@@ -17,6 +17,9 @@ const app = Vue.createApp({
             // New: Gradient effect toggle
             gradientEffectEnabled: true,
 
+            // Current tool in use
+            currentToolInUse: null,
+
             // Message data
             messages: [],
             userInput: '',
@@ -169,7 +172,10 @@ const app = Vue.createApp({
 
         // Get agent message list
         agentMessages() {
-            return this.messages.filter(msg => msg.role === 'assistant');
+            return this.messages.filter(msg =>
+                msg.role === 'assistant' &&
+                !(msg.content === '' || msg.content === null || msg.content === undefined)
+            );
         },
 
         // Get tool message list
@@ -250,6 +256,12 @@ const app = Vue.createApp({
             this.isDarkTheme = !this.isDarkTheme;
             this.applyTheme();
 
+            // Update the display status of the gradient effect button
+            const gradientBtn = document.getElementById('gradient-toggle-btn');
+            if (gradientBtn) {
+                gradientBtn.style.display = this.isDarkTheme ? 'flex' : 'none';
+            }
+
             // Save preference to localStorage
             localStorage.setItem('theme', this.isDarkTheme ? 'dark' : 'light');
         },
@@ -275,10 +287,10 @@ const app = Vue.createApp({
                 root.style.setProperty('--text-secondary', '#a0aec0');
                 root.style.setProperty('--border-color', '#4a5568');
                 document.body.classList.add('dark-theme');
-                // Use logo.png in dark mode
+                // Use logo_Gradient.png in dark mode
                 const logoElement = document.querySelector('.logo');
                 if (logoElement) {
-                    logoElement.src = '/static/images/logo.png';
+                    logoElement.src = '/static/images/logo_Gradient.png';
                 }
 
                 // Apply gradient effect settings after theme change
@@ -702,18 +714,6 @@ const app = Vue.createApp({
                             messageObj.name = messageObj.tool_calls[0].function.name;
                         }
                     }
-
-                    // Check if it's a special tool message, and handle terminate specifically
-                    if (messageObj.name && this.specialTools.includes(messageObj.name)) {
-                        // Only show notification card for terminate tool
-                        if (messageObj.name.toLowerCase() === 'terminate') {
-                            // Check if execution is successful
-                            const isSuccess = messageObj.content && messageObj.content.toLowerCase().includes('success');
-
-                            // Show task completion notification card
-                            this.showTaskCompletionCard(isSuccess);
-                        }
-                    }
                 }
 
                 this.messages.push(messageObj);
@@ -739,25 +739,45 @@ const app = Vue.createApp({
 
         // Update used tools list
         updateUsedTools(message) {
-            // If it's a tool message, add to used tools set
+            // Only process tool messages
             if (message.role === 'tool' && message.name) {
-                this.usedTools.add(message.name);
+                // Check if the tool is in the availableTools list
+                const tool = this.availableTools.find(t => t.name === message.name);
+                if (tool) {
+                    // Add to the used tools set
+                    this.usedTools.add(message.name);
 
-                // If used tools panel is closed, automatically open it
-                if (!this.isUsedToolsOpen && this.usedTools.size === 1) {
-                    this.activeToolTab = 'used';  // Switch to used tab
+                    // Update current tool in use
+                    this.currentToolInUse = message.name;
+
+                    // If it's the terminate tool, show notification card
+                    if (message.name.toLowerCase() === 'terminate' && tool.is_special) {
+                        // Check if the execution was successful
+                        const isSuccess = message.content && message.content.toLowerCase().includes('success');
+                        // Show task completion notification card
+                        this.showTaskCompletionCard(isSuccess);
+                    }
                 }
             }
 
-            // Check and add tools identified from tool calls
+            // Check tools in tool calls
             if (message.tool_calls && message.tool_calls.length > 0) {
-                for (const tool of message.tool_calls) {
-                    if (tool.function && tool.function.name) {
-                        this.usedTools.add(tool.function.name);
+                for (const toolCall of message.tool_calls) {
+                    if (toolCall.function && toolCall.function.name) {
+                        // Check if the tool is in the availableTools list
+                        const tool = this.availableTools.find(t => t.name === toolCall.function.name);
+                        if (tool) {
+                            // Add to the used tools set
+                            this.usedTools.add(toolCall.function.name);
 
-                        // If used tools panel is closed, automatically open it
-                        if (!this.isUsedToolsOpen && this.usedTools.size === 1) {
-                            this.activeToolTab = 'used';  // Switch to used tab
+                            // Update current tool in use
+                            this.currentToolInUse = toolCall.function.name;
+
+                            // If it's the terminate tool, show notification card
+                            if (toolCall.function.name.toLowerCase() === 'terminate' && tool.is_special) {
+                                // Directly show success notification card, as the result cannot be determined during the tool call phase
+                                this.showTaskCompletionCard(true);
+                            }
                         }
                     }
                 }

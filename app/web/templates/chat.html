@@ -41,7 +41,7 @@
         <nav class="main-nav">
             <div class="nav-container">
                 <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
-                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo.png') }}' : '{{ url_for('static', filename='images/logo_black.png') }}'"
+                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo_Gradient.png') }}' : '{{ url_for('static', filename='images/logo_black.png') }}'"
                         alt="OpenManus Logo" class="logo">
                     <h1>OpenManus <span class="version-badge">Beta</span></h1>
                 </a>
@@ -78,7 +78,7 @@
 
                     <!-- Add configuration button -->
                     <button class="config-toggle" @click="toggleConfigPanel" :title="'系统配置'">
-                        <i class="fas fa-cog"></i>
+                        <i class="fas fa-wrench"></i>
                     </button>
 
                     <a href="https://github.com/mannaandpoem/OpenManus" target="_blank"
@@ -171,18 +171,7 @@
                         <h3>Tool List</h3>
                     </div>
 
-                    <div class="tools-tab-header">
-                        <button class="tab-btn" :class="{'active': activeToolTab === 'available'}"
-                            @click="activeToolTab = 'available'">
-                            Available (${availableTools.length})
-                        </button>
-                        <button class="tab-btn" :class="{'active': activeToolTab === 'used'}"
-                            @click="activeToolTab = 'used'">
-                            Used (${usedTools.size})
-                        </button>
-                    </div>
-
-                    <div v-if="activeToolTab === 'available'" class="tools-panel">
+                    <div class="tools-panel">
                         <ul class="tools-list" v-if="availableTools.length > 0">
                             <li v-for="tool in availableTools" :key="tool.name" class="tool-item">
                                 <div class="tool-icon"><i class="fas fa-cog"></i></div>
@@ -193,18 +182,6 @@
                             </li>
                         </ul>
                         <p v-else class="no-tools">No tools loaded</p>
-                    </div>
-
-                    <div v-if="activeToolTab === 'used'" class="tools-panel">
-                        <ul class="tools-list" v-if="usedTools.size > 0">
-                            <li v-for="toolName in Array.from(usedTools)" :key="toolName" class="tool-item used">
-                                <div class="tool-icon"><i class="fas fa-check-circle"></i></div>
-                                <div class="tool-info">
-                                    <div class="tool-name">${toolName}</div>
-                                </div>
-                            </li>
-                        </ul>
-                        <p v-else class="no-tools">No tools used in this session</p>
                     </div>
                 </div>
 
@@ -281,11 +258,19 @@
                         </div>
                     </div>
 
-                    <!-- Right side - OpenManus Computer -->
+                    <!-- Right side - OpenManus -->
                     <div class="messages-column tool-messages" ref="toolMessagesContainer">
                         <div class="column-header">
                             <i class="fas fa-tools"></i>
-                            <span>OpenManus Computer</span>
+                            <span>OpenManus</span>
+                        </div>
+
+                        <!-- Current tool in use display -->
+                        <div class="current-tool-display" v-if="currentToolInUse">
+                            <i v-if="currentToolInUse === 'terminate'" class="fas fa-check-circle completed-icon"></i>
+                            <i v-else class="fas fa-cog"></i>
+                            <span v-if="currentToolInUse === 'terminate'">Manus is completed</span>
+                            <span v-else>Manus in use: ${currentToolInUse}</span>
                         </div>
 
                         <div class="column-content">
@@ -368,7 +353,7 @@
         <!-- Configuration panel -->
         <div class="config-panel" :class="{ 'active': showConfigPanel }">
             <div class="config-panel-header">
-                <h2><i class="fas fa-cog"></i> System Configuration</h2>
+                <h2><i class="fas fa-wrench"></i> System Configuration</h2>
                 <button @click="toggleConfigPanel" class="close-btn">
                     <i class="fas fa-times"></i>
                 </button>
@@ -579,7 +564,8 @@
 
         <!-- Add floating control buttons -->
         <!-- 添加渐变效果切换按钮 -->
-        <div class="gradient-toggle" @click="toggleGradientEffect" :class="{'gradient-active': gradientEffectEnabled}">
+        <div class="gradient-toggle" @click="toggleGradientEffect" :class="{'gradient-active': gradientEffectEnabled}"
+            style="display:none;" id="gradient-toggle-btn">
             <i class="fas fa-paint-brush"></i>
         </div>
     </div>
@@ -601,6 +587,13 @@
                 document.getElementById('page-loader').style.opacity = '0';
                 setTimeout(function () {
                     document.getElementById('page-loader').style.display = 'none';
+                    // Show gradient effect button
+                    const gradientBtn = document.getElementById('gradient-toggle-btn');
+                    if (gradientBtn && document.body.classList.contains('dark-theme')) {
+                        gradientBtn.style.display = 'flex';
+                    } else if (gradientBtn) {
+                        gradientBtn.style.display = 'none';
+                    }
                 }, 500);
             }, 600);
         });

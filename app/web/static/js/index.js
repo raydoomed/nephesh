@@ -46,8 +46,8 @@ function initLoadingScreen() {
     ];
 
     let progress = 0;
-    const totalDuration = 5000; // Complete loading in 3.5 seconds
-    const interval = 30; // Update every 50ms
+    const totalDuration = 2400; // Complete loading in 3.5 seconds
+    const interval = 60; // Update every 50ms
     const steps = totalDuration / interval;
     const increment = 100 / steps;
 
