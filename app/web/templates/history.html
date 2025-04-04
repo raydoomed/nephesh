@@ -192,9 +192,23 @@
                             ${message.role === 'assistant' ? 'Manus' :
                             message.role === 'user' ? 'User' :
                             message.role === 'tool' ? 'Tool' : message.role}
+                            <span v-if="message.role === 'tool' && message.name"
+                                class="tool-name">(${message.name})</span>
                         </div>
                         <div class="history-message-time">${formatTime(message.time)}</div>
                         <div class="history-message-content" v-html="formatMessage(message.content)"></div>
+
+                        <!-- Tool call parameters section -->
+                        <div v-if="message.tool_calls && message.tool_calls.length > 0" class="tool-calls-container">
+                            <div v-for="(toolCall, toolIndex) in message.tool_calls" :key="'tc-'+index+'-'+toolIndex"
+                                class="tool-call">
+                                <div class="tool-call-header">
+                                    <span class="tool-call-name">Tool call: ${toolCall.function.name}</span>
+                                </div>
+                                <pre
+                                    class="tool-call-args"><code class="language-json">${formatJson(toolCall.function.arguments)}</code></pre>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

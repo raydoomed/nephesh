@@ -3026,3 +3026,23 @@ pre {
 .message-role .manus-eyes-animation {
     display: inline-flex;
 }
+
+.message.tool-arguments {
+    border-left: 3px solid #8B5CF6;
+    background-color: rgba(139, 92, 246, 0.05);
+}
+
+.message.tool-arguments .message-header {
+    background-color: rgba(139, 92, 246, 0.1);
+}
+
+.message.tool-arguments pre {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 4px;
+    padding: 10px;
+    margin: 5px 0;
+}
+
+.dark-theme .message.tool-arguments pre {
+    background-color: rgba(255, 255, 255, 0.05);
+}

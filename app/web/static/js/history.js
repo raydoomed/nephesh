@@ -249,10 +249,15 @@ const app = createApp({
                             .tool-message { background: #f0fff5; padding: 10px; border-radius: 5px; margin: 10px 0; font-family: monospace; }
                             pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
                             .message-header { font-weight: bold; margin-bottom: 5px; }
+                            .tool-calls { margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px; }
+                            .tool-call { background: rgba(79, 209, 197, 0.1); border-radius: 5px; margin: 8px 0; overflow: hidden; }
+                            .tool-call-header { padding: 5px 10px; background: rgba(79, 209, 197, 0.2); color: #2c7a7b; font-weight: bold; }
+                            .tool-call-args { margin: 0; padding: 10px; background: #f8f8f8; max-height: 300px; overflow: auto; font-family: monospace; font-size: 0.9em; }
                             @media print {
                                 body { font-size: 12pt; }
                                 h1 { font-size: 18pt; }
                                 h2 { font-size: 14pt; }
+                                .tool-calls { page-break-inside: avoid; }
                             }
                         </style>
                     </head>
@@ -281,6 +286,21 @@ const app = createApp({
                                 <div class="message-header">Assistant:</div>
                                 <div>${this.formatContent(content)}</div>
                             </div>`;
+
+                            // Add tool call arguments in assistant messages
+                            if (msg.tool_calls && msg.tool_calls.length > 0) {
+                                htmlContent += `<div class="tool-calls">`;
+                                for (const toolCall of msg.tool_calls) {
+                                    if (toolCall.function && toolCall.function.name) {
+                                        htmlContent += `
+                                        <div class="tool-call">
+                                            <div class="tool-call-header">工具调用: ${toolCall.function.name}</div>
+                                            <pre class="tool-call-args">${this.formatJson(toolCall.function.arguments)}</pre>
+                                        </div>`;
+                                    }
+                                }
+                                htmlContent += `</div>`;
+                            }
                         } else if (role === 'tool') {
                             const toolName = msg.name || 'Unknown tool';
                             htmlContent += `
@@ -288,6 +308,21 @@ const app = createApp({
                                 <div class="message-header">Tool (${toolName}):</div>
                                 <pre>${content}</pre>
                             </div>`;
+
+                            // Add tool call arguments in tool messages
+                            if (msg.tool_calls && msg.tool_calls.length > 0) {
+                                htmlContent += `<div class="tool-calls">`;
+                                for (const toolCall of msg.tool_calls) {
+                                    if (toolCall.function && toolCall.function.name) {
+                                        htmlContent += `
+                                        <div class="tool-call">
+                                            <div class="tool-call-header">Tool Call: ${toolCall.function.name}</div>
+                                            <pre class="tool-call-args">${this.formatJson(toolCall.function.arguments)}</pre>
+                                        </div>`;
+                                    }
+                                }
+                                htmlContent += `</div>`;
+                            }
                         }
                     });
 
@@ -467,12 +502,12 @@ const app = createApp({
 
             const cancelBtn = document.createElement('button');
             cancelBtn.className = 'secondary-btn';
-            cancelBtn.textContent = '取消';
+            cancelBtn.textContent = 'Cancel';
             cancelBtn.onclick = () => document.body.removeChild(overlay);
 
             const confirmBtn = document.createElement('button');
             confirmBtn.className = 'secondary-btn danger-btn';
-            confirmBtn.textContent = '确认';
+            confirmBtn.textContent = 'Confirm';
             confirmBtn.onclick = () => {
                 document.body.removeChild(overlay);
                 if (confirmCallback) confirmCallback();
@@ -534,7 +569,7 @@ const app = createApp({
                         });
                     }
                 } catch (e) {
-                    console.warn('无法解析时间:', timestamp);
+                    console.warn('Failed to parse time:', timestamp);
                 }
             }
 
@@ -584,7 +619,7 @@ const app = createApp({
             });
         },
 
-        // Convert URL to link
+        // Format links
         formatLinks(text) {
             if (typeof text !== 'string') {
                 return String(text);
@@ -592,6 +627,26 @@ const app = createApp({
 
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             return text.replace(urlRegex, url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+        },
+
+        // Format JSON data
+        formatJson(jsonData) {
+            if (!jsonData) return '';
+
+            try {
+                // If it's a string, try to parse
+                if (typeof jsonData === 'string') {
+                    const obj = JSON.parse(jsonData);
+                    return JSON.stringify(obj, null, 2);
+                } else {
+                    // If already an object, format directly
+                    return JSON.stringify(jsonData, null, 2);
+                }
+            } catch (e) {
+                // If parsing fails, return original string
+                console.warn('JSON parsing failed:', e);
+                return jsonData;
+            }
         },
 
         // Apply code highlighting

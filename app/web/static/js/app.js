@@ -153,6 +153,9 @@ const app = Vue.createApp({
             messagesColumnMode: 'normal',  // 'normal' or 'split'
             thoughtsVisible: false,
             currentThought: "",
+
+            // Add a flag to indicate whether the user has manually scrolled the tool messages container
+            userScrolledToolMessages: false,
         };
     },
 
@@ -233,6 +236,16 @@ const app = Vue.createApp({
         this.$watch('messages', () => {
             this.scrollToBottom();
         }, { deep: true });
+
+        // Add scroll event listener for the tool messages container
+        this.$nextTick(() => {
+            if (this.$refs.toolMessagesContainer) {
+                const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
+                if (container) {
+                    container.addEventListener('scroll', this.handleToolMessagesScroll);
+                }
+            }
+        });
     },
 
     methods: {
@@ -412,7 +425,17 @@ const app = Vue.createApp({
             // Reapply code highlighting
             this.$nextTick(() => {
                 this.applyCodeHighlighting();
-                this.scrollToBottom(); // Scroll after typing effect ends
+
+                // Scroll both panels to the bottom
+                this.scrollToBottom();
+
+                // Ensure the tool messages container scrolls to the bottom
+                if (this.$refs.toolMessagesContainer) {
+                    const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }
             });
         },
 
@@ -436,6 +459,8 @@ const app = Vue.createApp({
                 // Reset state
                 this.stopPolling();
                 this.isProcessing = false;
+                // Reset user scroll flag
+                this.userScrolledToolMessages = false;
 
                 console.log('Creating new session...');
                 const response = await axios.post('/api/session');
@@ -555,6 +580,9 @@ const app = Vue.createApp({
             this.isProcessing = true;
             this.statusText = 'Processing...';
             this.connectionStatus = 'processing';
+
+            // Reset user scroll flag, allowing the tool messages container to start auto-scrolling
+            this.userScrolledToolMessages = false;
 
             // Scroll to bottom
             this.$nextTick(() => {
@@ -709,6 +737,29 @@ const app = Vue.createApp({
                 if (messageObj.role === 'assistant') {
                     // If it's an assistant message, delete any potential tool name
                     delete messageObj.name;
+
+                    // If assistant message contains tool_calls, create a new tool message to display in the tool output area
+                    if (messageObj.tool_calls && messageObj.tool_calls.length > 0) {
+                        for (const toolCall of messageObj.tool_calls) {
+                            if (toolCall.function && toolCall.function.name) {
+                                // Create a new tool call message
+                                const toolCallMsg = {
+                                    role: 'tool',
+                                    name: toolCall.function.name,
+                                    content: `Tool call arguments:\n\`\`\`json\n${this.formatJson(toolCall.function.arguments)}\n\`\`\``,
+                                    time: new Date(),
+                                    class: 'tool-arguments'
+                                };
+                                this.messages.push(toolCallMsg);
+
+                                // Update used tools list
+                                this.updateUsedTools(toolCallMsg);
+
+                                // Add typing effect
+                                this.startTypingEffect(toolCallMsg);
+                            }
+                        }
+                    }
                 } else if (messageObj.role === 'tool') {
                     // If it's a tool message, ensure correct tool name
                     if (messageObj.base64_image) {
@@ -731,17 +782,33 @@ const app = Vue.createApp({
                 // If it's an assistant message with content, apply typewriter effect
                 if (messageObj.role === 'assistant' && messageObj.content) {
                     this.startTypingEffect(messageObj);
+                } else if (messageObj.role === 'tool' && messageObj.content && !messageObj.base64_image && messageObj.class === 'tool-arguments') {
+                    // 为工具调用参数消息添加打字机效果，但排除截图类消息
+                    this.startTypingEffect(messageObj);
                 } else {
                     // If not an assistant message, or has no content, reapply code highlighting
                     this.$nextTick(() => {
                         this.applyCodeHighlighting();
-                        this.scrollToBottom();
+
+                        // If it's a tool message, only scroll the right tool messages container
+                        if (messageObj.role === 'tool' && this.$refs.toolMessagesContainer) {
+                            const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
+                            if (container) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        } else {
+                            // Otherwise, scroll all message containers
+                            this.scrollToBottom();
+                        }
                     });
                 }
             }
 
             // After processing all messages, scroll to bottom again
-            this.scrollToBottom();
+            // Only scroll if there's no typing effect
+            if (!this.typingInProgress) {
+                this.scrollToBottom();
+            }
         },
 
         // Update used tools list
@@ -958,7 +1025,7 @@ const app = Vue.createApp({
         // Scroll to bottom of message container
         scrollToBottom() {
             this.$nextTick(() => {
-                // Scroll agent messages container
+                // Always scroll the agent messages container
                 if (this.$refs.agentMessagesContainer) {
                     const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
                     if (container) {
@@ -967,8 +1034,8 @@ const app = Vue.createApp({
                     }
                 }
 
-                // Scroll tool messages container
-                if (this.$refs.toolMessagesContainer) {
+                // Only scroll the tool messages container when there is no ongoing typing effect and the user has not scrolled manually
+                if (this.$refs.toolMessagesContainer && !this.typingInProgress && !this.userScrolledToolMessages) {
                     const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
                     if (container) {
                         // Use more reliable scrolling method
@@ -976,6 +1043,25 @@ const app = Vue.createApp({
                     }
                 }
             });
+        },
+
+        // Handle tool messages container scroll event
+        handleToolMessagesScroll(event) {
+            if (!this.$refs.toolMessagesContainer) return;
+
+            const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
+            if (!container) return;
+
+            // Calculate if at the bottom (allow for some tolerance)
+            const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
+
+            // If not at the bottom, mark as user has manually scrolled
+            this.userScrolledToolMessages = !atBottom;
+
+            // When user scrolls back to the bottom, reset the flag
+            if (atBottom) {
+                this.userScrolledToolMessages = false;
+            }
         },
 
         // Set up message animations
@@ -1445,6 +1531,14 @@ const app = Vue.createApp({
 
         // Listen for page resize, update message container scrolling
         window.removeEventListener('resize', this.scrollToBottom);
+
+        // Clear the scroll event listener for the tool messages container
+        if (this.$refs.toolMessagesContainer) {
+            const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
+            if (container) {
+                container.removeEventListener('scroll', this.handleToolMessagesScroll);
+            }
+        }
     },
 
     // Add CSS transition hooks
