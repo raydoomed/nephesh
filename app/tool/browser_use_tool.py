@@ -610,11 +610,23 @@ Page content:
         """Ensure cleanup when object is destroyed."""
         if self.browser is not None or self.context is not None:
             try:
-                asyncio.run(self.cleanup())
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(self.cleanup())
-                loop.close()
+                # Do not attempt to run asyncio tasks in __del__, as it may conflict with the event loop binding
+                logger.warning(
+                    "BrowserUseTool was not properly cleaned up through the async cleanup method"
+                )
+
+                # Record current state but do not attempt cleanup, to avoid event loop lock issues
+                if self.context is not None:
+                    logger.warning("Browser context was not closed properly")
+                if self.browser is not None:
+                    logger.warning("Browser instance was not closed properly")
+
+                # Manually clear references, but do not close connections
+                self.context = None
+                self.dom_service = None
+                self.browser = None
+            except Exception as e:
+                logger.error(f"Error in BrowserUseTool __del__ method: {str(e)}")
 
     @classmethod
     def create_with_context(cls, context: Context) -> "BrowserUseTool[Context]":

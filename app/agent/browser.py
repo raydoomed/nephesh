@@ -77,7 +77,13 @@ class BrowserContextHelper:
     async def cleanup_browser(self):
         browser_tool = self.agent.available_tools.get_tool(BrowserUseTool().name)
         if browser_tool and hasattr(browser_tool, "cleanup"):
-            await browser_tool.cleanup()
+            try:
+                # Add timeout control to avoid long blocking
+                await asyncio.wait_for(browser_tool.cleanup(), timeout=10.0)
+            except asyncio.TimeoutError:
+                logger.warning("Browser cleanup timed out after 10 seconds")
+            except Exception as e:
+                logger.error(f"Error during browser cleanup: {e}", exc_info=True)
 
 
 class BrowserAgent(ToolCallAgent):
@@ -128,8 +134,20 @@ class BrowserAgent(ToolCallAgent):
             if browser_tool:
                 logger.info(f"🧹 Cleaning up browser resources...")
                 try:
+                    # Create a new event loop for cleanup to avoid lock conflicts
+                    asyncio.get_running_loop()
+                    new_browser_tool = BrowserUseTool()
+                    # Copy the browser/context references from the original tool to the new tool
+                    new_browser_tool.browser = browser_tool.browser
+                    new_browser_tool.context = browser_tool.context
+                    new_browser_tool.dom_service = browser_tool.dom_service
+                    # Reset the references of the original tool to avoid re-cleaning when __del__ is triggered
+                    browser_tool.browser = None
+                    browser_tool.context = None
+                    browser_tool.dom_service = None
+
                     # Add timeout control
-                    await asyncio.wait_for(browser_tool.cleanup(), timeout=10.0)
+                    await asyncio.wait_for(new_browser_tool.cleanup(), timeout=10.0)
                     logger.info(f"✅ Browser resources cleanup completed")
                 except asyncio.TimeoutError:
                     logger.warning(f"⚠️ Browser resources cleanup timed out")

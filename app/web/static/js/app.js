@@ -154,8 +154,9 @@ const app = Vue.createApp({
             thoughtsVisible: false,
             currentThought: "",
 
-            // Add a flag to indicate whether the user has manually scrolled the tool messages container
+            // Add flags to indicate whether the user has manually scrolled the message containers
             userScrolledToolMessages: false,
+            userScrolledAgentMessages: false,
         };
     },
 
@@ -243,6 +244,14 @@ const app = Vue.createApp({
                 const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
                 if (container) {
                     container.addEventListener('scroll', this.handleToolMessagesScroll);
+                }
+            }
+
+            // Add scroll event listener for the agent messages container
+            if (this.$refs.agentMessagesContainer) {
+                const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
+                if (container) {
+                    container.addEventListener('scroll', this.handleAgentMessagesScroll);
                 }
             }
         });
@@ -459,8 +468,9 @@ const app = Vue.createApp({
                 // Reset state
                 this.stopPolling();
                 this.isProcessing = false;
-                // Reset user scroll flag
+                // Reset user scroll flags
                 this.userScrolledToolMessages = false;
+                this.userScrolledAgentMessages = false;
 
                 console.log('Creating new session...');
                 const response = await axios.post('/api/session');
@@ -581,8 +591,9 @@ const app = Vue.createApp({
             this.statusText = 'Processing...';
             this.connectionStatus = 'processing';
 
-            // Reset user scroll flag, allowing the tool messages container to start auto-scrolling
+            // Reset user scroll flags, allowing the containers to start auto-scrolling
             this.userScrolledToolMessages = false;
+            this.userScrolledAgentMessages = false;
 
             // Scroll to bottom
             this.$nextTick(() => {
@@ -1025,16 +1036,19 @@ const app = Vue.createApp({
         // Scroll to bottom of message container
         scrollToBottom() {
             this.$nextTick(() => {
-                // Always scroll the agent messages container
+                // Scroll the agent messages container
                 if (this.$refs.agentMessagesContainer) {
                     const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
                     if (container) {
-                        // Use more reliable scrolling method
-                        container.scrollTop = container.scrollHeight;
+                        // Only auto-scroll if there's no streaming in progress or user hasn't manually scrolled
+                        if (!this.typingInProgress || !this.userScrolledAgentMessages) {
+                            // Use more reliable scrolling method
+                            container.scrollTop = container.scrollHeight;
+                        }
                     }
                 }
 
-                // Only scroll the tool messages container when there is no ongoing typing effect and the user has not scrolled manually
+                // Scroll the tool messages container
                 if (this.$refs.toolMessagesContainer && !this.typingInProgress && !this.userScrolledToolMessages) {
                     const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
                     if (container) {
@@ -1056,11 +1070,36 @@ const app = Vue.createApp({
             const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
 
             // If not at the bottom, mark as user has manually scrolled
-            this.userScrolledToolMessages = !atBottom;
+            // Only change the flag when we're actively streaming content
+            if (!atBottom && this.typingInProgress) {
+                this.userScrolledToolMessages = true;
+            }
 
             // When user scrolls back to the bottom, reset the flag
             if (atBottom) {
                 this.userScrolledToolMessages = false;
+            }
+        },
+
+        // Handle agent messages container scroll event
+        handleAgentMessagesScroll(event) {
+            if (!this.$refs.agentMessagesContainer) return;
+
+            const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
+            if (!container) return;
+
+            // Calculate if at the bottom (allow for some tolerance)
+            const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
+
+            // If not at the bottom, mark as user has manually scrolled
+            // Only change the flag when we're actively streaming content
+            if (!atBottom && this.typingInProgress) {
+                this.userScrolledAgentMessages = true;
+            }
+
+            // When user scrolls back to the bottom, reset the flag
+            if (atBottom) {
+                this.userScrolledAgentMessages = false;
             }
         },
 
@@ -1532,11 +1571,18 @@ const app = Vue.createApp({
         // Listen for page resize, update message container scrolling
         window.removeEventListener('resize', this.scrollToBottom);
 
-        // Clear the scroll event listener for the tool messages container
+        // Clear the scroll event listeners for the message containers
         if (this.$refs.toolMessagesContainer) {
             const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
             if (container) {
                 container.removeEventListener('scroll', this.handleToolMessagesScroll);
+            }
+        }
+
+        if (this.$refs.agentMessagesContainer) {
+            const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
+            if (container) {
+                container.removeEventListener('scroll', this.handleAgentMessagesScroll);
             }
         }
     },
