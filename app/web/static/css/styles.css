@@ -1366,17 +1366,33 @@ body {
 }
 
 .messages-column {
-    height: 100%;
-    background-color: var(--surface-color);
+    background-color: var(--background-color);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-lg);
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--border-radius);
     display: flex;
-    flex: 1;
     flex-direction: column;
-    max-height: 100%;
+    height: 100%;
     overflow: hidden;
-    min-height: 0;
+    position: relative;
+    transition: flex 0.3s ease-in-out;
+}
+
+.messages-column .column-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-3);
+}
+
+.column-header {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--background-color);
 }
 
 .messages-column .message {
@@ -1417,14 +1433,34 @@ body {
 
 .messages-container-split {
     display: flex;
+    flex: 1;
     flex-direction: row;
     gap: var(--spacing-3);
-    height: 100%;
-    margin-bottom: 0;
+    height: calc(100% - 60px);
     overflow: hidden;
-    padding: var(--spacing-3);
-    width: 100%;
-    min-height: 0;
+    position: relative;
+}
+
+.messages-column {
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    transition: flex 0.3s ease-in-out;
+}
+
+/* Let the left Manus message area automatically expand to fill the space */
+.messages-column.agent-messages {
+    flex: 1;
+}
+
+/* The right tool message area occupies a fixed proportion */
+.messages-column.tool-messages {
+    flex: 0 0 48%;
 }
 
 .modal-content {
