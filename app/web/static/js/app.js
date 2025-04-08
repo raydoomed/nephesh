@@ -255,6 +255,9 @@ const app = Vue.createApp({
                 }
             }
         });
+
+        // Initialize the drag functionality for the gradient toggle button
+        this.initGradientToggleDrag();
     },
 
     methods: {
@@ -1551,6 +1554,52 @@ const app = Vue.createApp({
             } else {
                 body.classList.add('gradient-disabled');
             }
+        },
+
+        // Initialize the drag functionality for the gradient toggle button
+        initGradientToggleDrag() {
+            const gradientToggle = document.getElementById('gradient-toggle-btn');
+            if (!gradientToggle) return;
+
+            let isDragging = false;
+            let startY = 0;
+            let startBottom = 0;
+
+            gradientToggle.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startY = e.clientY;
+                startBottom = parseInt(getComputedStyle(gradientToggle).bottom);
+
+                // Prevent text selection
+                e.preventDefault();
+
+                // Disable transition effect during dragging
+                gradientToggle.style.transition = 'none';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const deltaY = startY - e.clientY;
+                const newBottom = startBottom + deltaY;
+
+                // Limit the drag range within the viewport
+                const maxBottom = window.innerHeight - gradientToggle.offsetHeight;
+                const minBottom = 0;
+                const clampedBottom = Math.min(Math.max(newBottom, minBottom), maxBottom);
+
+                // Set position directly, without using transform to avoid inertia
+                gradientToggle.style.bottom = `${clampedBottom}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+
+                isDragging = false;
+
+                // Restore transition effect
+                gradientToggle.style.transition = 'right 0.3s ease';
+            });
         },
     },
 

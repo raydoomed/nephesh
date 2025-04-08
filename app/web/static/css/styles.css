@@ -673,7 +673,7 @@ body {
 }
 
 .dark-theme .gradient-toggle {
-    background: #2d3748;
+    background: var(--primary-color);
     display: flex;
 }
 
@@ -1170,23 +1170,34 @@ body {
     align-items: center;
     background: var(--surface-color);
     border-radius: 50%;
-    bottom: 15px;
+    bottom: 80px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    cursor: pointer;
+    cursor: default;
     display: none;
     height: 40px;
     justify-content: center;
     position: fixed;
-    right: 15px;
-    transition: all 0.3s ease;
+    right: -30px;
+    transition: right 0.3s ease;
     width: 40px;
     z-index: 1000;
+    user-select: none;
 }
 
-.gradient-toggle i {
-    color: var(--text-secondary);
-    font-size: 20px;
-    transition: all 0.3s ease;
+.gradient-toggle:hover {
+    right: 0;
+}
+
+.dark-theme .gradient-toggle {
+    display: flex;
+    background: var(--primary-color);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark-theme .gradient-toggle:hover {
+    background: var(--primary-light);
+    box-shadow: 0 4px 20px rgba(74, 0, 224, 0.3);
+    transform: translateY(-2px);
 }
 
 .image-container {
