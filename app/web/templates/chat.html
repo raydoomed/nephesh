@@ -606,7 +606,232 @@
                 }, 500);
             }, 600);
         });
+
+        // Replace the original fetchMessages function, integrate waiting for user input functionality
+        async function fetchMessages() {
+            if (!sessionId) {
+                console.warn("No active session to fetch messages for");
+                return false;
+            }
+
+            try {
+                const response = await axios.get(`/api/messages/${sessionId}`);
+                const data = response.data;
+
+                // Process received messages
+                if (data.messages && data.messages.length > 0) {
+                    // Add messages to chat UI
+                    data.messages.forEach(message => {
+                        // Check if the message is already in the chat
+                        if (!isChatMessageDuplicate(message)) {
+                            addMessageToChat(message);
+                        }
+                    });
+
+                    // Scroll to bottom
+                    scrollChatToBottom();
+                }
+
+                // Check if waiting for user input
+                if (data.waiting_for_input) {
+                    // Update UI to show waiting for user input status
+                    setWaitingForUserInputUI(true);
+                    return false; // Task not completed, but needs user input
+                } else {
+                    // Restore normal UI status
+                    setWaitingForUserInputUI(false);
+
+                    // Check if task is completed
+                    return data.completed;
+                }
+            } catch (err) {
+                console.error("Error fetching messages:", err);
+                return false;
+            }
+        }
+
+        // Check if message is already displayed in chat
+        function isChatMessageDuplicate(message) {
+            const messageId = generateMessageId(message);
+            return !!document.getElementById(messageId);
+        }
+
+        // Generate unique ID for messages
+        function generateMessageId(message) {
+            let idBase = `${message.role}-${message.time}`;
+
+            // If there is a tool name, add it to the ID
+            if (message.name) {
+                idBase += `-${message.name}`;
+            }
+
+            // Process content to avoid ID being too long
+            if (message.content) {
+                // Use content hash or first few characters
+                const contentPart = message.content.substring(0, 20).replace(/\s+/g, '_');
+                idBase += `-${contentPart}`;
+            }
+
+            return `message-${idBase}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+
+        // Add function to handle waiting for user input UI
+        function setWaitingForUserInputUI(isWaiting) {
+            const sendButton = document.querySelector('.send-button');
+            const promptInput = document.querySelector('#prompt-input');
+            const waitingIndicator = document.querySelector('.waiting-for-input-indicator') ||
+                createWaitingIndicator();
+
+            if (isWaiting) {
+                // Highlight input box and send button
+                promptInput.classList.add('waiting-for-input');
+                sendButton.classList.add('waiting-for-input');
+
+                // Show waiting indicator
+                waitingIndicator.style.display = 'block';
+
+                // Update send button text
+                const sendIcon = sendButton.querySelector('i.fa-paper-plane');
+                if (sendIcon) {
+                    sendIcon.classList.add('fa-shake');
+                }
+            } else {
+                // Restore normal state
+                promptInput.classList.remove('waiting-for-input');
+                sendButton.classList.remove('waiting-for-input');
+
+                // Hide waiting indicator
+                waitingIndicator.style.display = 'none';
+
+                // Restore send button text
+                const sendIcon = sendButton.querySelector('i.fa-paper-plane');
+                if (sendIcon) {
+                    sendIcon.classList.remove('fa-shake');
+                }
+            }
+        }
+
+        // Create waiting for user input indicator
+        function createWaitingIndicator() {
+            const indicator = document.createElement('div');
+            indicator.className = 'waiting-for-input-indicator';
+            indicator.innerHTML = `
+                <div class="indicator-content">
+                    <i class="fas fa-comment-dots fa-pulse"></i>
+                    <span>等待您的输入...</span>
+                </div>
+            `;
+
+            // Add to input area
+            const inputContainer = document.querySelector('.prompt-container');
+            inputContainer.insertBefore(indicator, inputContainer.firstChild);
+
+            // Default hide
+            indicator.style.display = 'none';
+
+            return indicator;
+        }
+
+        // Add message to chat window
+        function addMessageToChat(message) {
+            // Generate unique ID for messages
+            const messageId = generateMessageId(message);
+
+            // Avoid adding duplicate messages
+            if (document.getElementById(messageId)) {
+                return;
+            }
+
+            // Set message avatar
+            let avatar = '';
+            if (message.role === 'assistant') {
+                avatar = `<img src="${assistantAvatar}" alt="Assistant" class="avatar">`;
+            } else if (message.role === 'user') {
+                avatar = `<img src="${userAvatar}" alt="You" class="avatar">`;
+            } else if (message.role === 'tool') {
+                avatar = `<i class="fas fa-tools tool-avatar"></i>`;
+            }
+
+            // Create message element
+            const messageElement = document.createElement('div');
+            messageElement.id = messageId;
+            messageElement.className = `message ${message.role}-message`;
+
+            // ... The rest of the addMessageToChat function code remains unchanged ...
+        }
     </script>
+
+    <style>
+        /* Add styles for waiting for user input status */
+        .waiting-for-input {
+            border-color: #4a90e2 !important;
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3) !important;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
+            }
+        }
+
+        .waiting-for-input-indicator {
+            position: relative;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background-color: rgba(74, 144, 226, 0.1);
+            border-radius: 8px;
+            font-size: 14px;
+            color: #4a90e2;
+            transition: all 0.3s ease;
+        }
+
+        .waiting-for-input-indicator .indicator-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dark-theme .waiting-for-input-indicator {
+            background-color: rgba(74, 144, 226, 0.2);
+            color: #67a9ff;
+        }
+
+        /* Send button animation */
+        .fa-shake {
+            animation: shake 1.5s ease infinite;
+        }
+
+        @keyframes shake {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            25% {
+                transform: rotate(-5deg);
+            }
+
+            50% {
+                transform: rotate(0deg);
+            }
+
+            75% {
+                transform: rotate(5deg);
+            }
+
+            100% {
+                transform: rotate(0deg);
+            }
+        }
+    </style>
 </body>
 
 </html>

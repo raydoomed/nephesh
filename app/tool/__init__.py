@@ -7,8 +7,8 @@ from app.tool.planning import PlanningTool
 from app.tool.str_replace_editor import StrReplaceEditor
 from app.tool.terminate import Terminate
 from app.tool.tool_collection import ToolCollection
+from app.tool.wait_for_user_input import WaitForUserInput
 from app.tool.web_search import WebSearch
-
 
 __all__ = [
     "BaseTool",
@@ -21,4 +21,5 @@ __all__ = [
     "ToolCollection",
     "CreateChatCompletion",
     "PlanningTool",
+    "WaitForUserInput",
 ]

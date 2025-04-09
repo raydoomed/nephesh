@@ -15,7 +15,6 @@ from app.config import config
 from app.logger import logger
 from app.schema import Message
 
-
 # Disable werkzeug default access logs
 werkzeug_logger = logging.getLogger("werkzeug")
 werkzeug_logger.setLevel(logging.WARNING)  # Only show WARNING and higher level logs
@@ -323,6 +322,16 @@ async def chat():
     agent = sessions[session_id]
     message_queue = message_queues[session_id]
 
+    # 检查智能体是否处于等待用户输入状态
+    # 如果是，则恢复执行，而不是创建新的执行线程
+    was_waiting = False
+    if agent.state == agent.state.__class__.WAITING_FOR_USER_INPUT:
+        logger.info(
+            f"Agent was waiting for user input in session {session_id}, resuming execution"
+        )
+        agent.state = agent.state.__class__.RUNNING
+        was_waiting = True
+
     # Process request in background
     def process_request():
         async def _run():
@@ -331,7 +340,16 @@ async def chat():
                 logger.info(
                     f"Starting to process request for session {session_id}: {prompt[:50]}..."
                 )
-                task = asyncio.create_task(agent.run(prompt))
+
+                # 如果智能体之前在等待用户输入，则将用户的回复添加到内存中，但不启动新的run
+                if was_waiting:
+                    # 添加用户的回复作为消息
+                    agent.update_memory("user", prompt)
+                    # 继续执行下一步
+                    task = asyncio.create_task(agent.step())
+                else:
+                    # 正常启动新的运行流程
+                    task = asyncio.create_task(agent.run(prompt))
 
                 # Check task status in a loop, allowing external interruption
                 while not task.done():
@@ -339,14 +357,24 @@ async def chat():
                     if (
                         session_id not in sessions
                         or agent.state == agent.state.__class__.FINISHED
+                        or agent.state == agent.state.__class__.WAITING_FOR_USER_INPUT
                     ):
-                        logger.info(
-                            f"Session {session_id} has been terminated, cancelling task"
-                        )
-                        task.cancel()
-                        # Wait a bit after cancelling to allow task to clean up resources
-                        await asyncio.sleep(1.0)
-                        break
+                        # 如果agent在等待用户输入，不要取消任务
+                        if agent.state == agent.state.__class__.WAITING_FOR_USER_INPUT:
+                            logger.info(
+                                f"Agent is waiting for user input in session {session_id}"
+                            )
+                            # 让任务正常完成
+                            # await asyncio.wait_for(task, timeout=3.0)
+                            break
+                        else:
+                            logger.info(
+                                f"Session {session_id} has been terminated, cancelling task"
+                            )
+                            task.cancel()
+                            # Wait a bit after cancelling to allow task to clean up resources
+                            await asyncio.sleep(1.0)
+                            break
                     await asyncio.sleep(0.1)
 
                 # Wait for task to complete or be cancelled
@@ -362,13 +390,15 @@ async def chat():
                 logger.error(f"Error processing request: {str(e)}", exc_info=True)
                 message_queue.put({"error": str(e)})
             finally:
-                # Mark task as complete
-                try:
-                    message_queue.put(None)
-                except Exception as e:
-                    logger.error(
-                        f"Failed to send completion signal to message queue: {str(e)}"
-                    )
+                # 只有当智能体不处于等待状态时才发送完成信号
+                if agent.state != agent.state.__class__.WAITING_FOR_USER_INPUT:
+                    # Mark task as complete
+                    try:
+                        message_queue.put(None)
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send completion signal to message queue: {str(e)}"
+                        )
 
         asyncio.run(_run())
 
@@ -537,16 +567,23 @@ def clear_all_history():
 
 @app.route("/api/messages/<session_id>", methods=["GET"])
 def get_messages(session_id):
-    if session_id not in sessions or sessions[session_id] is None:
+    """Get messages from an active session with SSE streaming"""
+    if session_id not in sessions:
         return jsonify({"error": "Invalid session ID"}), 400
 
     agent = sessions[session_id]
-    message_queue = message_queues[session_id]
-    current_counter = message_counters[session_id]
+    if agent is None:
+        # Empty session record, no agent yet
+        logger.warning(f"Empty agent session record, no messages: {session_id}")
+        return jsonify({"messages": [], "completed": True})
 
-    # Message processing
-    new_messages = []
+    # Get all new messages from the agent queue
+    message_queue = message_queues[session_id]
+    message_counter = message_counters[session_id]
+
+    # Initialize variables
     completed = False
+    new_messages = []
 
     # Process messages in the queue (errors or completion markers)
     queue_messages = []
@@ -575,10 +612,74 @@ def get_messages(session_id):
     if new_messages:
         return jsonify({"messages": new_messages, "completed": completed})
 
+    # Add a shortcut to return completed flag if no messages are available
+    # and agent state is finished or agent is waiting for user input
+    if message_queue.empty() and (
+        agent.state == agent.state.__class__.FINISHED
+        or agent.state == agent.state.__class__.WAITING_FOR_USER_INPUT
+    ):
+        logger.info(f"Agent state: {agent.state}. No new messages.")
+
+        # Get all messages so the frontend can update
+        agent_messages = []
+
+        try:
+            agent_messages = agent.memory.messages
+        except Exception as e:
+            logger.error(f"Failed to access agent messages: {str(e)}")
+
+        # Format messages for frontend use
+        formatted_msgs = []
+        for msg in agent_messages:
+            if hasattr(msg, "role"):  # Ensure message has required attributes
+                formatted_msg = _format_message(msg)
+                if formatted_msg:
+                    formatted_msgs.append(formatted_msg)
+
+        # Ensure messages are sorted by time
+        formatted_msgs.sort(key=lambda m: m.get("time", 0))
+
+        # Return only the messages that haven't been counted yet
+        new_messages = formatted_msgs[message_counter:]
+
+        # Update counter
+        message_counters[session_id] = len(formatted_msgs)
+
+        # Add messages to session history
+        if session_id in session_history and new_messages:
+            for msg in new_messages:
+                msg_copy = msg.copy()
+                if "time" in msg_copy:
+                    # Ensure timestamp is ISO formatted string
+                    msg_copy["time"] = datetime.datetime.fromtimestamp(
+                        msg_copy["time"]
+                    ).isoformat()
+                session_history[session_id]["messages"].append(msg_copy)
+
+            # Save session history
+            save_history(session_id)
+
+        # If agent is in waiting for user input state, return special status
+        if agent.state == agent.state.__class__.WAITING_FOR_USER_INPUT:
+            return jsonify(
+                {
+                    "messages": new_messages,
+                    "completed": False,
+                    "waiting_for_input": True,
+                }
+            )
+        else:
+            return jsonify(
+                {
+                    "messages": new_messages,
+                    "completed": agent.state == agent.state.__class__.FINISHED,
+                }
+            )
+
     # Get new messages from agent
     agent_messages = []
-    if len(agent.messages) > current_counter:
-        for i in range(current_counter, len(agent.messages)):
+    if len(agent.messages) > message_counter:
+        for i in range(message_counter, len(agent.messages)):
             msg = agent.messages[i]
             formatted_msg = _format_message(msg)
             if formatted_msg:
@@ -605,17 +706,17 @@ def get_messages(session_id):
     if not completed:
         completed = agent.state.value not in ["RUNNING", "THINKING", "ACTING"]
 
-        # If task is completed, ensure completion status is saved
-        if (
-            completed
-            and session_id in session_history
-            and "completed_at" not in session_history[session_id]
-        ):
-            session_history[session_id][
-                "completed_at"
-            ] = datetime.datetime.now().isoformat()
-            save_history(session_id)
-            logger.info(f"Task completed, saved session completion time: {session_id}")
+    # If task is completed, ensure completion status is saved
+    if (
+        completed
+        and session_id in session_history
+        and "completed_at" not in session_history[session_id]
+    ):
+        session_history[session_id][
+            "completed_at"
+        ] = datetime.datetime.now().isoformat()
+        save_history(session_id)
+        logger.info(f"Task completed, saved session completion time: {session_id}")
 
     return jsonify({"messages": new_messages, "completed": completed})
 
@@ -1134,9 +1235,9 @@ def export_session(session_id, format):
     # Choose export method based on format
     if format == "json":
         response = jsonify(session_data)
-        response.headers[
-            "Content-Disposition"
-        ] = f"attachment; filename=session-{session_id[:8]}.json"
+        response.headers["Content-Disposition"] = (
+            f"attachment; filename=session-{session_id[:8]}.json"
+        )
         return response
 
     elif format == "txt":

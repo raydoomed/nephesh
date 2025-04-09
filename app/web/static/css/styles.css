@@ -3093,3 +3093,73 @@ pre {
 .dark-theme .message.tool-arguments pre {
     background-color: rgba(255, 255, 255, 0.05);
 }
+
+/* Waiting for user input state styles */
+.waiting-for-input {
+    border-color: #4a90e2 !important;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3) !important;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
+    }
+}
+
+.waiting-for-input-indicator {
+    position: relative;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    background-color: rgba(74, 144, 226, 0.1);
+    border-radius: 8px;
+    font-size: 14px;
+    color: #4a90e2;
+    transition: all 0.3s ease;
+}
+
+.waiting-for-input-indicator .indicator-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dark-theme .waiting-for-input-indicator {
+    background-color: rgba(74, 144, 226, 0.2);
+    color: #67a9ff;
+}
+
+/* Send button animation */
+.fa-shake {
+    animation: shake 1.5s ease infinite;
+}
+
+@keyframes shake {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(-5deg);
+    }
+
+    50% {
+        transform: rotate(0deg);
+    }
+
+    75% {
+        transform: rotate(5deg);
+    }
+
+    100% {
+        transform: rotate(0deg);
+    }
+}
