@@ -220,10 +220,15 @@ class ToolCallAgent(ReActAgent):
         if not self._is_special_tool(name):
             return
 
-        if self._should_finish_execution(name=name, result=result, **kwargs):
-            # Set agent state to finished
+        # Only set FINISHED state for terminate tool
+        if name.lower() == "terminate":
             logger.info(f"🏁 Special tool '{name}' has completed the task!")
             self.state = AgentState.FINISHED
+            self._should_cleanup = True
+        elif name.lower() == "wait_for_user_input":
+            logger.info(f"⏳ Waiting for user input...")
+            self.state = AgentState.WAITING_FOR_USER_INPUT
+            self._should_cleanup = False
 
     @staticmethod
     def _should_finish_execution(**kwargs) -> bool:

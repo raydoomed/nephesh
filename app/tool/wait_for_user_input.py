@@ -3,6 +3,7 @@ from typing import Optional
 from app.schema import AgentState
 from app.tool.base import BaseTool
 
+
 _WAIT_FOR_USER_INPUT_DESCRIPTION = """
 This tool is used when you need to wait for user input or feedback.
 After calling this tool, the agent will pause execution until the user provides new input.
@@ -36,8 +37,10 @@ class WaitForUserInput(BaseTool):
 
         # If there is an agent instance, set its state to WAITING_FOR_INPUT
         if agent and hasattr(agent, "state"):
-            # We need to add the WAITING_FOR_USER_INPUT state in schema.py
+            # Set state to WAITING_FOR_USER_INPUT
             agent.state = AgentState.WAITING_FOR_USER_INPUT
+            # Ensure that cleanup is not triggered
+            agent._should_cleanup = False
 
         # Build the response message
         response = "Waiting for user input: " + message

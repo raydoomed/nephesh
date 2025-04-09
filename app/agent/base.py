@@ -138,6 +138,7 @@ class BaseAgent(BaseModel, ABC):
                 while (
                     self.current_step < self.max_steps
                     and self.state != AgentState.FINISHED
+                    and self.state != AgentState.WAITING_FOR_USER_INPUT
                 ):
                     self.current_step += 1
                     logger.info(f"Executing step {self.current_step}/{self.max_steps}")
@@ -170,31 +171,35 @@ class BaseAgent(BaseModel, ABC):
                     self.state = AgentState.IDLE
                     results.append(f"Terminated: Reached max steps ({self.max_steps})")
         finally:
-            # Ensure resources are cleaned up regardless of how execution ends
-            try:
-                logger.info("Cleaning up SANDBOX_CLIENT resources...")
-                await asyncio.wait_for(SANDBOX_CLIENT.cleanup(), timeout=5.0)
-                logger.info("SANDBOX_CLIENT resources cleanup completed")
-            except asyncio.TimeoutError:
-                logger.warning("SANDBOX_CLIENT resources cleanup timed out")
-            except Exception as e:
-                logger.error(
-                    f"Error when cleaning up SANDBOX_CLIENT resources: {e}",
-                    exc_info=True,
-                )
+            # Only cleanup if we're not waiting for user input and _should_cleanup is True
+            if self.state != AgentState.WAITING_FOR_USER_INPUT and getattr(
+                self, "_should_cleanup", True
+            ):
+                # Ensure resources are cleaned up regardless of how execution ends
+                try:
+                    logger.info("Cleaning up SANDBOX_CLIENT resources...")
+                    await asyncio.wait_for(SANDBOX_CLIENT.cleanup(), timeout=5.0)
+                    logger.info("SANDBOX_CLIENT resources cleanup completed")
+                except asyncio.TimeoutError:
+                    logger.warning("SANDBOX_CLIENT resources cleanup timed out")
+                except Exception as e:
+                    logger.error(
+                        f"Error when cleaning up SANDBOX_CLIENT resources: {e}",
+                        exc_info=True,
+                    )
 
-            # Call agent's cleanup method to clean up all other resources (including browser)
-            try:
-                logger.info("Calling agent specific cleanup...")
-                await asyncio.wait_for(self.cleanup(), timeout=10.0)
-                logger.info("Agent specific cleanup completed")
-            except asyncio.TimeoutError:
-                logger.warning("Agent cleanup timed out")
-            except Exception as e:
-                logger.error(
-                    f"Error when cleaning up agent resources: {e}",
-                    exc_info=True,
-                )
+                # Call agent's cleanup method to clean up all other resources (including browser)
+                try:
+                    logger.info("Calling agent specific cleanup...")
+                    await asyncio.wait_for(self.cleanup(), timeout=10.0)
+                    logger.info("Agent specific cleanup completed")
+                except asyncio.TimeoutError:
+                    logger.warning("Agent cleanup timed out")
+                except Exception as e:
+                    logger.error(
+                        f"Error when cleaning up agent resources: {e}",
+                        exc_info=True,
+                    )
 
         return "\n".join(results) if results else "No steps executed"
 

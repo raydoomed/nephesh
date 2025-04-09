@@ -10,6 +10,7 @@ from app.tool.tool_collection import ToolCollection
 from app.tool.wait_for_user_input import WaitForUserInput
 from app.tool.web_search import WebSearch
 
+
 __all__ = [
     "BaseTool",
     "Bash",

@@ -15,6 +15,7 @@ from app.config import config
 from app.logger import logger
 from app.schema import Message
 
+
 # Disable werkzeug default access logs
 werkzeug_logger = logging.getLogger("werkzeug")
 werkzeug_logger.setLevel(logging.WARNING)  # Only show WARNING and higher level logs
@@ -1235,9 +1236,9 @@ def export_session(session_id, format):
     # Choose export method based on format
     if format == "json":
         response = jsonify(session_data)
-        response.headers["Content-Disposition"] = (
-            f"attachment; filename=session-{session_id[:8]}.json"
-        )
+        response.headers[
+            "Content-Disposition"
+        ] = f"attachment; filename=session-{session_id[:8]}.json"
         return response
 
     elif format == "txt":
