@@ -26,7 +26,7 @@ const app = Vue.createApp({
 
             // Polling control
             pollingInterval: null,
-            pollRate: 1000, // Polling interval (milliseconds)
+            pollRate: 300, // Polling interval (milliseconds)
 
             // Tool data
             availableTools: [],
