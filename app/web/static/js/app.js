@@ -65,7 +65,7 @@ const app = Vue.createApp({
             mouseY: 0,
 
             // Typewriter effect
-            typingSpeed: 30, // Typing speed per character (ms)
+            typingSpeed: 10, // Typing speed per character (ms)
             currentTypingMessage: null,
             typingInProgress: false,
             typingText: '',
