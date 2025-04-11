@@ -1018,6 +1018,27 @@ async def terminate_session(session_id):
     return jsonify({"status": "success", "message": "Session terminated"})
 
 
+@app.route("/api/status/<session_id>", methods=["GET"])
+def get_agent_status(session_id):
+    """Get current status of an agent, including step progress"""
+    if session_id not in sessions:
+        return jsonify({"error": "Invalid session ID"}), 400
+
+    agent = sessions[session_id]
+    if agent is None:
+        return jsonify({"error": "Agent not initialized"}), 404
+
+    # Return the current status information
+    return jsonify(
+        {
+            "status": agent.state.value,
+            "current_step": agent.current_step,
+            "max_steps": agent.max_steps,
+            "session_id": session_id,
+        }
+    )
+
+
 @app.route("/api/config", methods=["GET"])
 def get_config():
     """Get current system configuration"""

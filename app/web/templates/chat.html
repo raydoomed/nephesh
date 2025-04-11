@@ -240,7 +240,12 @@
                                         <div class="manus-eye"></div>
                                         <div class="manus-eye"></div>
                                     </div>
-                                    <span class="thinking-text">Manus is thinking...</span>
+                                    <span class="thinking-text" v-if="agentStatus.currentStep > 0">
+                                        Manus is processing... (Step ${agentStatus.currentStep}/${agentStatus.maxSteps})
+                                    </span>
+                                    <span class="thinking-text" v-else>
+                                        Manus is thinking...
+                                    </span>
                                 </div>
                             </div>
                         </div>

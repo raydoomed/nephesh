@@ -157,6 +157,14 @@ const app = Vue.createApp({
             // Add flags to indicate whether the user has manually scrolled the message containers
             userScrolledToolMessages: false,
             userScrolledAgentMessages: false,
+
+            // Add agent status properties
+            agentStatus: {
+                currentStep: 0,
+                maxSteps: 0,
+                status: ''
+            },
+            statusPollingInterval: null,
         };
     },
 
@@ -475,6 +483,13 @@ const app = Vue.createApp({
                 this.userScrolledToolMessages = false;
                 this.userScrolledAgentMessages = false;
 
+                // Reset step status
+                this.agentStatus = {
+                    currentStep: 0,
+                    maxSteps: 0,
+                    status: ''
+                };
+
                 console.log('Creating new session...');
                 const response = await axios.post('/api/session');
                 console.log('Session creation response:', response.data);
@@ -571,9 +586,9 @@ const app = Vue.createApp({
             });
         },
 
-        // Send message
+        // Send message to the server
         async sendMessage() {
-            if (!this.userInput.trim() || this.isProcessing || !this.isConnected) {
+            if (!this.userInput.trim() || !this.sessionId || this.isProcessing) {
                 return;
             }
 
@@ -583,27 +598,51 @@ const app = Vue.createApp({
             this.messages = this.messages.filter(msg => msg.role !== 'user');
 
             // Add new user message
-            this.messages.push({
+            const userMessageObj = {
                 role: 'user',
                 content: userMessage,
                 time: new Date()
-            });
+            };
 
+            // Save as last user message for task display
+            this.lastUserMessage = userMessageObj;
+
+            // Add message to array
+            this.messages.push(userMessageObj);
+
+            // Reset input
             this.userInput = '';
-            this.isProcessing = true;
-            this.statusText = 'Processing...';
-            this.connectionStatus = 'processing';
 
             // Reset user scroll flags, allowing the containers to start auto-scrolling
             this.userScrolledToolMessages = false;
             this.userScrolledAgentMessages = false;
 
-            // Scroll to bottom
+            // Adjust textarea height
+            this.$nextTick(() => {
+                if (this.$refs.userInputArea) {
+                    this.$refs.userInputArea.style.height = 'auto';
+                }
+            });
+
+            // Scroll to the bottom
             this.$nextTick(() => {
                 this.scrollToBottom();
             });
 
+            // Reset step status and start polling
+            this.agentStatus = {
+                currentStep: 0,
+                maxSteps: 0,
+                status: ''
+            };
+            this.startStatusPolling();
+
             try {
+                // Start processing state
+                this.isProcessing = true;
+                this.statusText = 'Processing...';
+                this.connectionStatus = 'processing';
+
                 // Send message to server
                 console.log(`Sending message to: ${axios.defaults.baseURL}/api/chat`);
                 console.log(`Session ID: ${this.sessionId}`);
@@ -614,13 +653,13 @@ const app = Vue.createApp({
 
                 console.log('Server response:', response.data);
 
-                // Start polling for responses
+                // Start message polling
                 this.startPolling();
             } catch (error) {
-                console.error('Failed to send message:', error);
+                console.error('Error sending message:', error);
                 this.isProcessing = false;
-                this.statusText = 'Connected';
-                this.connectionStatus = 'connected';
+                this.statusText = 'Error';
+                this.connectionStatus = 'error';
 
                 // Display more detailed error information
                 let errorMsg = 'Failed to send message, please try again.';
@@ -639,6 +678,9 @@ const app = Vue.createApp({
                 }
 
                 this.showError(errorMsg);
+
+                // Stop polling
+                this.stopPolling();
             }
         },
 
@@ -716,15 +758,12 @@ const app = Vue.createApp({
         // Stop polling
         stopPolling() {
             if (this.pollingInterval) {
-                // Do not clear polling immediately
-                const intervalToStop = this.pollingInterval;
+                clearInterval(this.pollingInterval);
                 this.pollingInterval = null;
-
-                // Delay stopping the polling to give the last message a chance to arrive
-                setTimeout(() => {
-                    clearInterval(intervalToStop);
-                }, 3000); // 3 seconds delay to ensure the last one or two polls can complete
             }
+
+            // Also stop status polling
+            this.stopStatusPolling();
         },
 
         // Process received messages
@@ -797,7 +836,7 @@ const app = Vue.createApp({
                 if (messageObj.role === 'assistant' && messageObj.content) {
                     this.startTypingEffect(messageObj);
                 } else if (messageObj.role === 'tool' && messageObj.content && !messageObj.base64_image && messageObj.class === 'tool-arguments') {
-                    // 为工具调用参数消息添加打字机效果，但排除截图类消息
+                    // Add typewriter effect to tool call parameter messages, but exclude screenshot messages
                     this.startTypingEffect(messageObj);
                 } else {
                     // If not an assistant message, or has no content, reapply code highlighting
@@ -822,6 +861,21 @@ const app = Vue.createApp({
             // Only scroll if there's no typing effect
             if (!this.typingInProgress) {
                 this.scrollToBottom();
+            }
+
+            // Check if completed
+            if (this.isProcessing && completed) {
+                this.isProcessing = false;
+                this.statusText = 'Connected';
+                this.connectionStatus = 'connected';
+                this.stopPolling(); // This also stops status polling
+
+                // Reset step status
+                this.agentStatus = {
+                    currentStep: 0,
+                    maxSteps: 0,
+                    status: ''
+                };
             }
         },
 
@@ -899,6 +953,16 @@ const app = Vue.createApp({
             this.isConnected = false;
             this.statusText = 'Terminating...';
             this.connectionStatus = 'disconnected';
+
+            // Reset step status
+            this.agentStatus = {
+                currentStep: 0,
+                maxSteps: 0,
+                status: ''
+            };
+
+            // Ensure status polling is stopped
+            this.stopStatusPolling();
 
             // Add terminating message prompt
             if (wasProcessing) {
@@ -1600,6 +1664,45 @@ const app = Vue.createApp({
                 // Restore transition effect
                 gradientToggle.style.transition = 'right 0.3s ease';
             });
+        },
+
+        // Start polling for agent status
+        startStatusPolling() {
+            // Stop previous polling if it exists
+            this.stopStatusPolling();
+
+            this.statusPollingInterval = setInterval(async () => {
+                try {
+                    if (!this.sessionId || !this.isProcessing) {
+                        this.stopStatusPolling();
+                        return;
+                    }
+
+                    await this.fetchAgentStatus();
+                } catch (error) {
+                    console.error('Error polling agent status:', error);
+                }
+            }, 1000); // Poll every second
+        },
+
+        // Stop polling for agent status
+        stopStatusPolling() {
+            if (this.statusPollingInterval) {
+                clearInterval(this.statusPollingInterval);
+                this.statusPollingInterval = null;
+            }
+        },
+
+        // Fetch agent status
+        async fetchAgentStatus() {
+            try {
+                const response = await axios.get(`/api/status/${this.sessionId}`);
+                this.agentStatus.currentStep = response.data.current_step;
+                this.agentStatus.maxSteps = response.data.max_steps;
+                this.agentStatus.status = response.data.status;
+            } catch (error) {
+                console.error('Failed to get agent status:', error);
+            }
         },
     },
 
