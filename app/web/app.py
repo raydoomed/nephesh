@@ -703,9 +703,12 @@ def get_messages(session_id):
         save_history(session_id)
         logger.info(f"Saved {len(agent_messages)} agent messages to history")
 
-    # Check if completed
+    # Check if completed - only consider tasks complete if agent is not in an active state
+    # AND the agent has either performed its final step OR been terminated
     if not completed:
-        completed = agent.state.value not in ["RUNNING", "THINKING", "ACTING"]
+        is_inactive = agent.state.value not in ["RUNNING", "THINKING", "ACTING"]
+        is_finished = (agent.current_step >= agent.max_steps) or hasattr(agent, "terminated") and agent.terminated
+        completed = is_inactive and is_finished
 
     # If task is completed, ensure completion status is saved
     if (

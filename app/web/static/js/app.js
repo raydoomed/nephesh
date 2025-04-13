@@ -617,13 +617,6 @@ const app = Vue.createApp({
             this.userScrolledToolMessages = false;
             this.userScrolledAgentMessages = false;
 
-            // Adjust textarea height
-            this.$nextTick(() => {
-                if (this.$refs.userInputArea) {
-                    this.$refs.userInputArea.style.height = 'auto';
-                }
-            });
-
             // Scroll to the bottom
             this.$nextTick(() => {
                 this.scrollToBottom();
@@ -707,7 +700,7 @@ const app = Vue.createApp({
 
                     // Process new messages
                     if (response.data.messages && response.data.messages.length > 0) {
-                        this.processMessages(response.data.messages);
+                        this.processMessages(response.data.messages, response.data.completed);
                     }
 
                     // If processing is complete, stop polling
@@ -767,7 +760,7 @@ const app = Vue.createApp({
         },
 
         // Process received messages
-        processMessages(newMessages) {
+        processMessages(newMessages, completed = false) {
             for (const msg of newMessages) {
                 // Check for errors
                 if (msg.error) {
@@ -864,18 +857,13 @@ const app = Vue.createApp({
             }
 
             // Check if completed
-            if (this.isProcessing && completed) {
+            if (this.isProcessing && completed === true) {
                 this.isProcessing = false;
                 this.statusText = 'Connected';
                 this.connectionStatus = 'connected';
                 this.stopPolling(); // This also stops status polling
 
-                // Reset step status
-                this.agentStatus = {
-                    currentStep: 0,
-                    maxSteps: 0,
-                    status: ''
-                };
+                // Keep step status displayed (don't reset)
             }
         },
 
@@ -1052,16 +1040,18 @@ const app = Vue.createApp({
         formatMessage(content) {
             if (!content) return '';
 
-            // If typing effect is in progress and current message is being processed
+            // Get text to format - either the full content or the partial typing text
+            let textToFormat = content;
             if (this.typingInProgress &&
                 this.currentTypingMessage &&
                 this.currentTypingMessage.content === content) {
-                // Return current typing text
-                return this.typingText;
+                // Use the current typing text instead of the full message
+                textToFormat = this.typingText;
             }
 
-            // Use marked.js to convert Markdown to HTML
-            const html = marked.parse(content);
+            // Always use markdown-it to convert Markdown to HTML
+            const md = window.markdownit();
+            const html = md.render(textToFormat);
             return html;
         },
 
@@ -1564,7 +1554,7 @@ const app = Vue.createApp({
             }
         },
 
-        // Automatically adjust input height
+        // Disable auto-adjusting input box height, maintain initial height
         autoResizeTextarea() {
             this.$nextTick(() => {
                 const textarea = this.$refs.userInputArea;
@@ -1573,15 +1563,8 @@ const app = Vue.createApp({
                 // Save current scroll position
                 const scrollTop = textarea.scrollTop;
 
-                // Reset height, so new height can be calculated correctly
-                textarea.style.height = 'auto';
-
-                // Set new height (scrollHeight is the actual height of the content), but not exceeding the maximum height
-                const newHeight = Math.min(80, Math.max(36, textarea.scrollHeight));
-                textarea.style.height = `${newHeight}px`;
-
-                // If content needs scrolling, restore scroll position
-                if (textarea.scrollHeight > newHeight) {
+                // Only restore scroll position if needed
+                if (textarea.scrollHeight > textarea.clientHeight) {
                     textarea.scrollTop = scrollTop;
                 }
 
