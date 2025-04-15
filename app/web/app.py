@@ -8,13 +8,12 @@ import threading
 import time
 from functools import wraps
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from app.agent.manus import Manus
 from app.config import config
 from app.logger import logger
 from app.schema import Message
-
 
 # Disable werkzeug default access logs
 werkzeug_logger = logging.getLogger("werkzeug")
@@ -707,7 +706,11 @@ def get_messages(session_id):
     # AND the agent has either performed its final step OR been terminated
     if not completed:
         is_inactive = agent.state.value not in ["RUNNING", "THINKING", "ACTING"]
-        is_finished = (agent.current_step >= agent.max_steps) or hasattr(agent, "terminated") and agent.terminated
+        is_finished = (
+            (agent.current_step >= agent.max_steps)
+            or hasattr(agent, "terminated")
+            and agent.terminated
+        )
         completed = is_inactive and is_finished
 
     # If task is completed, ensure completion status is saved
@@ -1260,9 +1263,9 @@ def export_session(session_id, format):
     # Choose export method based on format
     if format == "json":
         response = jsonify(session_data)
-        response.headers[
-            "Content-Disposition"
-        ] = f"attachment; filename=session-{session_id[:8]}.json"
+        response.headers["Content-Disposition"] = (
+            f"attachment; filename=session-{session_id[:8]}.json"
+        )
         return response
 
     elif format == "txt":
@@ -1353,3 +1356,15 @@ def generate_markdown_export(session_data):
             lines.append("")
 
     return "\n".join(lines)
+
+
+@app.route("/utils/<path:filename>")
+def utils(filename):
+    """处理utils目录下的文件请求"""
+    import os
+
+    from flask import send_from_directory
+
+    # 获取当前文件(app.py)所在目录的utils文件夹绝对路径
+    utils_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "utils")
+    return send_from_directory(utils_dir, filename)

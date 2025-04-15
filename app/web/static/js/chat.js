@@ -1,6 +1,377 @@
 // Configure axios default URL
 axios.defaults.baseURL = window.location.origin;  // Use the current page's origin as the base URL
 
+// 使用ES模块语法导入mathProcessor
+import mathProcessor from '../../utils/mathProcessor.js';
+
+// 导入必要的Vue API
+const { shallowRef } = Vue;
+
+// 创建消息处理器模块
+const messageHandler = {
+    // 开始打字效果
+    startTypingEffect(app, message) {
+        // 如果有正在进行的打字效果，停止它
+        if (app.typingTimer) {
+            clearInterval(app.typingTimer);
+            app.typingTimer = null;
+        }
+
+        // 初始化打字效果
+        app.typingInProgress = true;
+        app.currentTypingMessage = message;
+        app.typingText = '';
+        app.typingIndex = 0;
+
+        const content = message.content || '';
+
+        // 开始打字效果
+        app.typingTimer = setInterval(() => {
+            if (app.typingIndex < content.length) {
+                app.typingText += content[app.typingIndex];
+                app.typingIndex++;
+
+                // 每次添加新字符后，立即应用渲染和代码高亮
+                app.$nextTick(() => {
+                    // 在每个字符添加后应用代码高亮
+                    this.applyCodeHighlighting();
+                    // 滚动到底部以显示最新内容
+                    app.scrollToBottom();
+                });
+            } else {
+                this.completeTypingEffect(app);
+            }
+        }, app.typingSpeed);
+    },
+
+    // 完成打字效果
+    completeTypingEffect(app) {
+        if (app.typingTimer) {
+            clearInterval(app.typingTimer);
+            app.typingTimer = null;
+        }
+
+        if (app.currentTypingMessage) {
+            app.currentTypingMessage.content = app.currentTypingMessage.content || '';
+            app.typingText = app.currentTypingMessage.content;
+        }
+
+        app.typingInProgress = false;
+        app.currentTypingMessage = null;
+
+        // 最终滚动确保所有内容都可见
+        app.$nextTick(() => {
+            // 滚动两个面板到底部
+            app.scrollToBottom();
+
+            // 确保工具消息容器滚动到底部
+            if (app.$refs.toolMessagesContainer) {
+                const container = app.$refs.toolMessagesContainer.querySelector('.column-content');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        });
+    },
+
+    // 处理接收到的消息
+    processMessages(app, newMessages, completed = false) {
+        for (const msg of newMessages) {
+            // 检查错误
+            if (msg.error) {
+                this.showError(app, msg.error);
+                continue;
+            }
+
+            // 跳过用户消息，因为我们已经在顶部区域显示了用户消息
+            if (msg.role === 'user') {
+                continue;
+            }
+
+            // 确保消息对象包含必要的属性
+            const messageObj = {
+                ...msg,
+                time: new Date()
+            };
+
+            // 根据后端的角色和类型进行处理
+            if (messageObj.role === 'assistant') {
+                // 如果是助手消息，删除任何潜在的工具名称
+                delete messageObj.name;
+
+                // 如果助手消息包含工具调用，创建一个新的工具消息以在工具输出区域显示
+                if (messageObj.tool_calls && messageObj.tool_calls.length > 0) {
+                    for (const toolCall of messageObj.tool_calls) {
+                        if (toolCall.function && toolCall.function.name) {
+                            // 创建新的工具调用消息
+                            const toolCallMsg = {
+                                role: 'tool',
+                                name: toolCall.function.name,
+                                content: `Tool call arguments:\n\`\`\`json\n${this.formatJson(toolCall.function.arguments)}\n\`\`\``,
+                                time: new Date(),
+                                class: 'tool-arguments'
+                            };
+                            // 直接推送到数组
+                            app.messages.push(toolCallMsg);
+
+                            // 更新已使用工具列表
+                            this.updateUsedTools(app, toolCallMsg);
+
+                            // 添加打字效果
+                            this.startTypingEffect(app, toolCallMsg);
+                        }
+                    }
+                }
+            } else if (messageObj.role === 'tool') {
+                // 如果是工具消息，确保正确的工具名称
+                if (messageObj.base64_image) {
+                    // 如果包含截图，将浏览器截图用作工具名称
+                    messageObj.name = messageObj.name || 'Browser Screenshot';
+                    messageObj.class = (messageObj.class || '') + ' browser-screenshot';
+                } else if (messageObj.tool_calls && messageObj.tool_calls.length > 0) {
+                    // 使用工具调用中的名称
+                    if (!messageObj.name && messageObj.tool_calls[0].function) {
+                        messageObj.name = messageObj.tool_calls[0].function.name;
+                    }
+                }
+            }
+
+            // 直接推送到数组
+            app.messages.push(messageObj);
+
+            // 更新已使用工具列表
+            this.updateUsedTools(app, messageObj);
+
+            // 如果是带有内容的助手消息，应用打字机效果
+            if (messageObj.role === 'assistant' && messageObj.content) {
+                this.startTypingEffect(app, messageObj);
+            } else if (messageObj.role === 'tool' && messageObj.content && !messageObj.base64_image && messageObj.class === 'tool-arguments') {
+                // 为工具调用参数消息添加打字机效果，但排除截图消息
+                this.startTypingEffect(app, messageObj);
+            } else {
+                // 如果不是需要打字效果的消息，直接应用渲染
+                this.applyCodeHighlighting();
+
+                // 滚动到合适的位置
+                // 如果是工具消息，只滚动右侧工具消息容器
+                if (messageObj.role === 'tool' && app.$refs.toolMessagesContainer) {
+                    const container = app.$refs.toolMessagesContainer.querySelector('.column-content');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    // 否则，滚动所有消息容器
+                    app.scrollToBottom();
+                }
+            }
+        }
+
+        // 处理完所有消息后，再次滚动到底部
+        // 仅在没有打字效果时滚动
+        if (!app.typingInProgress) {
+            app.scrollToBottom();
+        }
+
+        // 检查是否完成
+        if (app.isProcessing && completed === true) {
+            app.isProcessing = false;
+            app.statusText = 'Connected';
+            app.connectionStatus = 'connected';
+            app.stopPolling(); // 这也会停止状态轮询
+
+            // 保持步骤状态显示(不重置)
+        }
+    },
+
+    // 更新已使用工具列表
+    updateUsedTools(app, message) {
+        // 只处理工具消息
+        if (message.role === 'tool' && message.name) {
+            // 检查工具是否在可用工具列表中
+            const tool = app.availableTools.find(t => t.name === message.name);
+            if (tool) {
+                // 添加到已使用工具集合
+                app.usedTools.add(message.name);
+
+                // 更新当前使用的工具
+                app.currentToolInUse = message.name;
+
+                // 如果是终止工具，显示通知卡
+                if (message.name.toLowerCase() === 'terminate' && tool.is_special) {
+                    // 检查执行是否成功
+                    const isSuccess = message.content && message.content.toLowerCase().includes('success');
+                    // 显示任务完成通知卡
+                    app.showTaskCompletionCard(isSuccess);
+                }
+
+                // 检测文件编辑工具，并自动刷新文件列表
+                if (message.name === 'str_replace_editor') {
+                    // 延迟刷新文件列表，确保文件写入已完成
+                    setTimeout(() => {
+                        app.refreshFiles();
+                    }, 500);
+                }
+            }
+        }
+
+        // 检查工具调用中的工具
+        if (message.tool_calls && message.tool_calls.length > 0) {
+            for (const toolCall of message.tool_calls) {
+                if (toolCall.function && toolCall.function.name) {
+                    // 检查工具是否在可用工具列表中
+                    const tool = app.availableTools.find(t => t.name === toolCall.function.name);
+                    if (tool) {
+                        // 添加到已使用工具集合
+                        app.usedTools.add(toolCall.function.name);
+
+                        // 更新当前使用的工具
+                        app.currentToolInUse = toolCall.function.name;
+
+                        // 如果是终止工具，显示通知卡
+                        if (toolCall.function.name.toLowerCase() === 'terminate' && tool.is_special) {
+                            // 在工具调用阶段直接显示成功通知卡，因为无法确定结果
+                            app.showTaskCompletionCard(true);
+                        }
+
+                        // 检测文件编辑工具，并自动刷新文件列表
+                        if (toolCall.function.name === 'str_replace_editor') {
+                            // 工具调用阶段标记需要刷新文件列表，等待工具执行完毕后再刷新
+                            app.needRefreshFiles = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 如果之前标记了需要刷新文件，且当前收到了str_replace_editor的响应，则刷新文件列表
+        if (app.needRefreshFiles && message.role === 'tool' && message.name === 'str_replace_editor') {
+            // 延迟刷新文件列表，确保文件写入已完成
+            setTimeout(() => {
+                app.refreshFiles();
+                app.needRefreshFiles = false;
+            }, 500);
+        }
+    },
+
+    // 格式化消息内容
+    formatMessage(app, content) {
+        if (!content) return '';
+
+        // 获取要格式化的文本 - 要么是完整内容，要么是部分输入文本
+        let textToFormat = content;
+        if (app.typingInProgress &&
+            app.currentTypingMessage &&
+            app.currentTypingMessage.content === content) {
+            // 使用当前打字文本而不是完整消息
+            textToFormat = app.typingText;
+        }
+
+        // 预处理：将[...]格式的数学公式转换为$$...$$格式
+        // 修改为使用ES模块导入的mathProcessor
+        try {
+            // 使用导入的mathProcessor模块
+            textToFormat = mathProcessor.preprocessMathFormulas(textToFormat);
+        } catch (error) {
+            console.error('处理数学公式时出错:', error);
+        }
+
+        // 使用markdown-it将Markdown转换为HTML，并添加优化配置
+        const md = window.markdownit({
+            html: true,          // 允许HTML标签
+            linkify: true,       // 自动转换URL为链接
+            typographer: true,   // 启用一些语言中立的替换和引号
+            highlight: function (str, lang) {
+                // 使用Prism进行代码高亮
+                if (lang && Prism.languages[lang]) {
+                    try {
+                        return Prism.highlight(str, Prism.languages[lang], lang);
+                    } catch (__) { }
+                }
+                return ''; // 使用默认的外部高亮工具
+            }
+        });
+
+        // 添加KaTeX插件以支持数学公式
+        if (window.markdownitKatex) {
+            try {
+                md.use(window.markdownitKatex, {
+                    throwOnError: false,
+                    errorColor: '#cc0000'
+                });
+            } catch (e) {
+                console.error("Error configuring markdown-it-katex:", e);
+            }
+        }
+
+        // 渲染Markdown为HTML
+        const html = md.render(textToFormat);
+        return html;
+    },
+
+    // 应用代码高亮
+    applyCodeHighlighting() {
+        // 使用Prism.js重新应用代码高亮
+        Prism.highlightAll();
+
+        // 确保KaTeX公式也能正确渲染
+        try {
+            if (typeof renderMathInElement === 'function') {
+                const elements = document.querySelectorAll('.message-content');
+                elements.forEach(element => {
+                    renderMathInElement(element, {
+                        delimiters: [
+                            { left: "$$", right: "$$", display: true },
+                            { left: "$", right: "$", display: false },
+                            { left: "\\(", right: "\\)", display: false },
+                            { left: "\\[", right: "\\]", display: true }
+                        ],
+                        throwOnError: false
+                    });
+                });
+            }
+        } catch (e) {
+            console.warn('Error rendering math:', e);
+        }
+    },
+
+    // 格式化JSON字符串
+    formatJson(jsonString) {
+        try {
+            if (typeof jsonString === 'string') {
+                // 解析JSON字符串并美化格式
+                const obj = JSON.parse(jsonString);
+                return JSON.stringify(obj, null, 2);
+            } else if (jsonString !== null && jsonString !== undefined) {
+                // 如果已经是对象，只需美化
+                return JSON.stringify(jsonString, null, 2);
+            } else {
+                // 如果为null或undefined，返回空字符串
+                return '';
+            }
+        } catch (e) {
+            // 如果解析失败，返回原始字符串
+            console.warn('JSON parsing failed:', e, jsonString);
+            return jsonString || '';
+        }
+    },
+
+    // 显示错误消息
+    showError(app, errorMessage) {
+        // 直接推送到数组
+        app.messages.push({
+            role: 'assistant',
+            content: `Error occurred: ${errorMessage}`,
+            time: new Date(),
+            class: 'error-message'
+        });
+
+        // 滚动到底部
+        app.$nextTick(() => {
+            app.scrollToBottom();
+        });
+    }
+};
+
 // Vue application
 const app = Vue.createApp({
     delimiters: ['${', '}'],  // Custom delimiters to avoid conflicts with Flask template syntax
@@ -14,19 +385,24 @@ const app = Vue.createApp({
             statusText: 'Not connected',
             connectionStatus: 'disconnected',
 
-            // New: Gradient effect toggle
+            // Gradient effect toggle
             gradientEffectEnabled: true,
 
             // Current tool in use
             currentToolInUse: null,
 
-            // Message data
+            // 标记是否需要刷新文件列表
+            needRefreshFiles: false,
+
+            // Message data - 恢复为普通响应式数组
             messages: [],
             userInput: '',
 
             // Polling control
             pollingInterval: null,
             pollRate: 300, // Polling interval (milliseconds)
+            maxRetries: 3, // 最大重试次数
+            retryCount: 0, // 重试计数器
 
             // Tool data
             availableTools: [],
@@ -42,7 +418,7 @@ const app = Vue.createApp({
             uploadTarget: 'workspace', // 'workspace' or 'input'
             showUploadModal: false,
 
-            // Navbar notification
+            // Notification related
             navbarNotification: {
                 show: false,
                 message: '',
@@ -79,7 +455,7 @@ const app = Vue.createApp({
             // Theme settings
             isDarkTheme: true, // Default dark theme
 
-            // New: Currently active tool tab
+            // Currently active tool tab
             activeToolTab: 'available',
 
             // Configuration related
@@ -154,17 +530,23 @@ const app = Vue.createApp({
             thoughtsVisible: false,
             currentThought: "",
 
-            // Add flags to indicate whether the user has manually scrolled the message containers
+            // User scroll flags
             userScrolledToolMessages: false,
             userScrolledAgentMessages: false,
 
-            // Add agent status properties
+            // Agent status properties
             agentStatus: {
                 currentStep: 0,
                 maxSteps: 0,
                 status: ''
             },
             statusPollingInterval: null,
+
+            // Event listener references
+            eventListeners: {
+                mouseMoveHandler: null,
+                keydownHandler: null
+            }
         };
     },
 
@@ -182,8 +564,9 @@ const app = Vue.createApp({
             return this.messages.filter(msg => msg.role !== 'user');
         },
 
-        // Get agent message list
+        // Get agent message list - 使用计算属性缓存优化
         agentMessages() {
+            // 使用计算缓存来减少重复计算
             return this.messages.filter(msg =>
                 msg.role === 'assistant' &&
                 !(msg.content === '' || msg.content === null || msg.content === undefined)
@@ -244,7 +627,7 @@ const app = Vue.createApp({
         // Listen for message list changes, ensure auto-scrolling
         this.$watch('messages', () => {
             this.scrollToBottom();
-        }, { deep: true });
+        }, { deep: true }); // 改回深度监听，确保所有变化都被捕获
 
         // Add scroll event listener for the tool messages container
         this.$nextTick(() => {
@@ -266,9 +649,47 @@ const app = Vue.createApp({
 
         // Initialize the drag functionality for the gradient toggle button
         this.initGradientToggleDrag();
+
+        // 添加对示例任务点击的处理
+        this.$nextTick(() => {
+            this.setupExampleTasksListener();
+        });
     },
 
     methods: {
+        // 使用新的消息处理模块
+        startTypingEffect(message) {
+            messageHandler.startTypingEffect(this, message);
+        },
+
+        completeTypingEffect() {
+            messageHandler.completeTypingEffect(this);
+        },
+
+        processMessages(newMessages, completed = false) {
+            messageHandler.processMessages(this, newMessages, completed);
+        },
+
+        formatMessage(content) {
+            return messageHandler.formatMessage(this, content);
+        },
+
+        applyCodeHighlighting() {
+            messageHandler.applyCodeHighlighting();
+        },
+
+        formatJson(jsonString) {
+            return messageHandler.formatJson(jsonString);
+        },
+
+        showError(errorMessage) {
+            messageHandler.showError(this, errorMessage);
+        },
+
+        updateUsedTools(message) {
+            messageHandler.updateUsedTools(this, message);
+        },
+
         // Image preview functionality
         expandImage(event) {
             this.modalImage = event.target.src;
@@ -299,15 +720,6 @@ const app = Vue.createApp({
             localStorage.setItem('theme', this.isDarkTheme ? 'dark' : 'light');
         },
 
-        // Load theme preference
-        loadThemePreference() {
-            const savedPreference = localStorage.getItem('theme');
-            if (savedPreference !== null) {
-                this.isDarkTheme = savedPreference === 'dark';
-            }
-            this.applyTheme();
-        },
-
         // Apply theme
         applyTheme() {
             const root = document.documentElement;
@@ -326,8 +738,12 @@ const app = Vue.createApp({
                     logoElement.src = '/static/images/logo_Gradient.png';
                 }
 
-                // Apply gradient effect settings after theme change
-                this.applyGradientEffectSettings();
+                // 检查用户偏好再应用渐变效果设置
+                const savedGradientEffect = localStorage.getItem('gradientEffect');
+                if (savedGradientEffect === null || savedGradientEffect === 'true') {
+                    // 只有当用户未明确禁用渐变效果时才应用
+                    this.applyGradientEffectSettings();
+                }
             } else {
                 // Light mode
                 root.style.setProperty('--background-color', '#f8f9fa');
@@ -355,7 +771,8 @@ const app = Vue.createApp({
 
         // Initialize mouse tracking functionality
         initMouseTracking() {
-            document.addEventListener('mousemove', (e) => {
+            // Create handler function and save reference
+            this.eventListeners.mouseMoveHandler = (e) => {
                 this.mouseX = e.clientX;
                 this.mouseY = e.clientY;
 
@@ -371,12 +788,16 @@ const app = Vue.createApp({
                         panel.style.setProperty('--y', `${y}%`);
                     }
                 });
-            });
+            };
+
+            // Add event listener
+            document.addEventListener('mousemove', this.eventListeners.mouseMoveHandler);
         },
 
         // Set up keyboard shortcuts
         setupKeyboardShortcuts() {
-            document.addEventListener('keydown', (e) => {
+            // Create handler function and save reference
+            this.eventListeners.keydownHandler = (e) => {
                 // Escape key: stop typewriter effect or close image modal
                 if (e.key === 'Escape') {
                     if (this.typingInProgress) {
@@ -396,76 +817,10 @@ const app = Vue.createApp({
                 if (e.key === 't' && document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'INPUT') {
                     this.toggleTheme();
                 }
-            });
-        },
+            };
 
-        // Typewriter effect
-        startTypingEffect(message) {
-            // If there's a previous typing effect in progress, stop it
-            if (this.typingTimer) {
-                clearInterval(this.typingTimer);
-                this.typingTimer = null;
-            }
-
-            // Initialize typing effect
-            this.typingInProgress = true;
-            this.currentTypingMessage = message;
-            this.typingText = '';
-            this.typingIndex = 0;
-
-            const content = message.content || '';
-
-            // Start typing effect
-            this.typingTimer = setInterval(() => {
-                if (this.typingIndex < content.length) {
-                    this.typingText += content[this.typingIndex];
-                    this.typingIndex++;
-                    this.scrollToBottom();
-                } else {
-                    this.completeTypingEffect();
-                }
-            }, this.typingSpeed);
-        },
-
-        // Complete typing effect
-        completeTypingEffect() {
-            if (this.typingTimer) {
-                clearInterval(this.typingTimer);
-                this.typingTimer = null;
-            }
-
-            if (this.currentTypingMessage) {
-                this.currentTypingMessage.content = this.currentTypingMessage.content || '';
-                this.typingText = this.currentTypingMessage.content;
-            }
-
-            this.typingInProgress = false;
-            this.currentTypingMessage = null;
-
-            // Reapply code highlighting
-            this.$nextTick(() => {
-                this.applyCodeHighlighting();
-
-                // Scroll both panels to the bottom
-                this.scrollToBottom();
-
-                // Ensure the tool messages container scrolls to the bottom
-                if (this.$refs.toolMessagesContainer) {
-                    const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
-                    if (container) {
-                        container.scrollTop = container.scrollHeight;
-                    }
-                }
-            });
-        },
-
-        // Toggle the collapsed state of the tools list
-        toggleToolsSection(section) {
-            if (section === 'availableTools') {
-                this.isAvailableToolsOpen = !this.isAvailableToolsOpen;
-            } else if (section === 'usedTools') {
-                this.isUsedToolsOpen = !this.isUsedToolsOpen;
-            }
+            // Add event listener
+            document.addEventListener('keydown', this.eventListeners.keydownHandler);
         },
 
         // Create a new session
@@ -509,18 +864,206 @@ const app = Vue.createApp({
                 // Get available tools list
                 this.fetchAvailableTools();
 
-                // Add welcome message
+                // 添加welcome message和工具箱
                 const welcomeMessage = {
                     role: 'assistant',
-                    content: 'Hello! I\'m Manus, a general-purpose intelligent agent. I can help you complete various tasks. Please tell me what you need help with?',
+                    content: `<div class="welcome-header">
+<h1>你好！我是 Manus 智能助手 👋</h1>
+
+<p>我可以帮助你完成各种任务。以下是我的一些核心能力：</p>
+</div>
+
+<style>
+.welcome-header {
+  text-align: center;
+  margin-bottom: 20px;
+  max-width: 100%;
+}
+.welcome-header h1 {
+  font-size: 2em;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.welcome-header p {
+  font-size: 1.1em;
+  margin-top: 10px;
+  color: var(--text-secondary);
+}
+</style>
+
+<div class="welcome-tools-container">
+  <div class="welcome-tools-wrapper">
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📊</span> <strong>数据分析</strong> - 处理Excel、CSV等表格数据，生成各类图表，数据可视化，提供深度分析报告</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📝</span> <strong>文档创建</strong> - 生成专业报告，撰写文章，编辑各类文本内容，支持多种格式输出</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🖼️</span> <strong>图像生成</strong> - 根据描述创建高质量图像，编辑照片，设计图形，生成图表和信息图</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📑</span> <strong>PDF处理</strong> - 创建专业PDF报告，提取PDF内容，格式转换，添加水印和注释</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🎯</span> <strong>PPT制作</strong> - 创建精美演示文稿，设计专业幻灯片，生成图表和动画效果</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">💻</span> <strong>代码编写</strong> - 编写Python、JavaScript等多种语言代码，调试问题，优化性能</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🔍</span> <strong>网络搜索</strong> - 查询最新信息，搜索学术资料，寻找解决方案，获取实时数据</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🌐</span> <strong>网页浏览</strong> - 访问网站，获取信息，分析网页内容，提取关键数据</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📧</span> <strong>邮件助手</strong> - 起草专业邮件，回复消息，管理邮件模板，生成回复建议</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🧮</span> <strong>数学计算</strong> - 解决复杂数学问题，进行高级计算，绘制函数图像，统计分析</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📊</span> <strong>数据分析</strong> - 处理Excel、CSV等表格数据，生成各类图表，数据可视化，提供深度分析报告</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📝</span> <strong>文档创建</strong> - 生成专业报告，撰写文章，编辑各类文本内容，支持多种格式输出</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🖼️</span> <strong>图像生成</strong> - 根据描述创建高质量图像，编辑照片，设计图形，生成图表和信息图</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">📑</span> <strong>PDF处理</strong> - 创建专业PDF报告，提取PDF内容，格式转换，添加水印和注释</div>
+    <div class="welcome-tool-item"><span class="welcome-tool-icon">🎯</span> <strong>PPT制作</strong> - 创建精美演示文稿，设计专业幻灯片，生成图表和动画效果</div>
+  </div>
+</div>
+
+<style>
+.welcome-tools-container {
+  height: 34px;
+  overflow: hidden;
+  margin: 10px 0;
+  white-space: nowrap;
+  border-radius: 6px;
+  position: relative;
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+.welcome-tools-wrapper {
+  display: flex;
+  flex-wrap: nowrap;
+  height: 34px;
+  animation: welcomeScrollLeftContinuous 30s linear infinite;
+}
+
+@keyframes welcomeScrollLeftContinuous {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-200%); }
+}
+
+.welcome-tool-item {
+  flex: 0 0 auto;
+  background-color: rgba(230, 235, 250, 0.3);
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-right: 10px;
+  transition: transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9em;
+  height: 24px;
+  line-height: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.dark-theme .welcome-tool-item {
+  background-color: #1A202C;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dark-theme .welcome-tool-item:hover {
+  transform: translateY(-2px);
+  background-color: #2D3748;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.welcome-tool-icon {
+  margin-right: 5px;
+}
+
+.welcome-tool-item:hover {
+  transform: translateY(-2px);
+  background-color: rgba(230, 235, 250, 0.5);
+}
+
+.welcome-tools-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style-type: none;
+  padding: 0;
+  margin: 15px 0;
+}
+
+.welcome-tools-examples li {
+  background-color: rgba(240, 240, 250, 0.5);
+  padding: 10px 15px;
+  border-radius: 20px;
+  display: inline-block;
+  font-size: 0.9em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.dark-theme .welcome-tools-examples li {
+  background-color: #1A202C;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dark-theme .welcome-tools-examples li:hover {
+  background-color: #2D3748;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.welcome-tools-examples li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: rgba(240, 240, 250, 0.8);
+}
+</style>
+
+## 💡 示例任务
+
+<ul class="welcome-tools-examples">
+  <li>📈 帮我分析这个Excel数据并生成趋势图表</li>
+  <li>📄 创建一个关于气候变化的详细PDF报告</li>
+  <li>🎨 为我的产品演示设计专业PPT，要有动画效果</li>
+  <li>⚙️ 编写一个Python爬虫程序获取新闻数据</li>
+  <li>🎭 生成一张未来城市科技风格的高清图像</li>
+  <li>🔢 帮我解决这个微积分方程：$\\frac{d}{dx}(x^2\\sin(x))$</li>
+  <li>✉️ 帮我写一封商务邮件给客户</li>
+  <li>🔎 查询最近关于人工智能的学术研究</li>
+</ul>
+
+<div class="welcome-message-footer">
+你可以直接告诉我你需要什么帮助，或者上传文件让我协助处理。
+<div class="welcome-message-tips">提示：点击右上角的"上传"按钮可以上传文件给我处理</div>
+</div>
+
+<style>
+.welcome-message-footer {
+  margin-top: 20px;
+  padding: 10px;
+  border-radius: 8px;
+  background-color: rgba(220, 230, 250, 0.5);
+  text-align: center;
+}
+
+/* 深色模式下的welcome-message-footer样式 */
+.dark-theme .welcome-message-footer {
+  background-color: #1A202C;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.welcome-message-tips {
+  margin-top: 5px;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+</style>`,
                     time: new Date()
                 };
 
                 this.messages.push(welcomeMessage);
 
-                // Use typewriter effect to display welcome message
+                // 不使用打字效果，直接显示完整的欢迎消息
+                // 原来的代码：
+                // this.$nextTick(() => {
+                //     this.startTypingEffect(welcomeMessage);
+                // });
+
+                // 更新DOM并滚动到底部
                 this.$nextTick(() => {
-                    this.startTypingEffect(welcomeMessage);
+                    this.scrollToBottom();
+                    this.applyCodeHighlighting();
                 });
 
                 console.log(`New session created successfully, ID: ${this.sessionId}`);
@@ -677,14 +1220,30 @@ const app = Vue.createApp({
             }
         },
 
+        // Initialize message polling system
+        setupMessagePolling() {
+            // If polling is already set up, stop it first
+            if (this.pollingInterval) {
+                this.stopPolling();
+            }
+
+            // 重置重试计数器
+            this.retryCount = 0;
+
+            // Only start polling if we have a valid session and are in processing state
+            if (this.sessionId && this.isProcessing) {
+                this.startPolling();
+            }
+        },
+
         // Start polling for messages
         startPolling() {
             if (this.pollingInterval) {
                 clearInterval(this.pollingInterval);
             }
 
-            let retryCount = 0;
-            const maxRetries = 3;
+            // 使用实例属性而不是局部变量，以便在多次调用间保持状态
+            this.retryCount = 0;
 
             this.pollingInterval = setInterval(async () => {
                 try {
@@ -696,7 +1255,7 @@ const app = Vue.createApp({
                     const response = await axios.get(`/api/messages/${this.sessionId}`);
 
                     // Reset retry counter
-                    retryCount = 0;
+                    this.retryCount = 0;
 
                     // Process new messages
                     if (response.data.messages && response.data.messages.length > 0) {
@@ -712,16 +1271,16 @@ const app = Vue.createApp({
                     }
                 } catch (error) {
                     console.error('Failed to get messages:', error);
-                    retryCount++;
+                    this.retryCount++;
 
-                    if (retryCount >= maxRetries) {
+                    if (this.retryCount >= this.maxRetries) {
                         this.stopPolling();
                         this.isProcessing = false;
                         this.statusText = 'Connected';
                         this.connectionStatus = 'connected';
 
                         // Display more detailed error information
-                        let errorMsg = `Polling for messages failed (retried ${retryCount} times)`;
+                        let errorMsg = `Polling for messages failed (retried ${this.retryCount} times)`;
                         if (error.response) {
                             errorMsg += ` Status code: ${error.response.status}`;
                             if (error.response.data && error.response.data.error) {
@@ -739,15 +1298,6 @@ const app = Vue.createApp({
             }, this.pollRate);
         },
 
-        // Initialize message polling system
-        setupMessagePolling() {
-            // This is an initialization function, the actual polling functionality is implemented in startPolling and stopPolling
-            // Only for compatibility, to ensure old code does not break
-            if (this.pollingInterval) {
-                this.stopPolling();
-            }
-        },
-
         // Stop polling
         stopPolling() {
             if (this.pollingInterval) {
@@ -757,262 +1307,6 @@ const app = Vue.createApp({
 
             // Also stop status polling
             this.stopStatusPolling();
-        },
-
-        // Process received messages
-        processMessages(newMessages, completed = false) {
-            for (const msg of newMessages) {
-                // Check for errors
-                if (msg.error) {
-                    this.showError(msg.error);
-                    continue;
-                }
-
-                // Skip user messages, because we already have a user message displayed in the top area
-                if (msg.role === 'user') {
-                    continue;
-                }
-
-                // Ensure message object includes necessary properties
-                const messageObj = {
-                    ...msg,
-                    time: new Date()
-                };
-
-                // Process based on role and type from backend
-                if (messageObj.role === 'assistant') {
-                    // If it's an assistant message, delete any potential tool name
-                    delete messageObj.name;
-
-                    // If assistant message contains tool_calls, create a new tool message to display in the tool output area
-                    if (messageObj.tool_calls && messageObj.tool_calls.length > 0) {
-                        for (const toolCall of messageObj.tool_calls) {
-                            if (toolCall.function && toolCall.function.name) {
-                                // Create a new tool call message
-                                const toolCallMsg = {
-                                    role: 'tool',
-                                    name: toolCall.function.name,
-                                    content: `Tool call arguments:\n\`\`\`json\n${this.formatJson(toolCall.function.arguments)}\n\`\`\``,
-                                    time: new Date(),
-                                    class: 'tool-arguments'
-                                };
-                                this.messages.push(toolCallMsg);
-
-                                // Update used tools list
-                                this.updateUsedTools(toolCallMsg);
-
-                                // Add typing effect
-                                this.startTypingEffect(toolCallMsg);
-                            }
-                        }
-                    }
-                } else if (messageObj.role === 'tool') {
-                    // If it's a tool message, ensure correct tool name
-                    if (messageObj.base64_image) {
-                        // If contains screenshot, use browser screenshot as tool name
-                        messageObj.name = messageObj.name || 'Browser Screenshot';
-                        messageObj.class = (messageObj.class || '') + ' browser-screenshot';
-                    } else if (messageObj.tool_calls && messageObj.tool_calls.length > 0) {
-                        // Use name from tool calls
-                        if (!messageObj.name && messageObj.tool_calls[0].function) {
-                            messageObj.name = messageObj.tool_calls[0].function.name;
-                        }
-                    }
-                }
-
-                this.messages.push(messageObj);
-
-                // Update used tools list
-                this.updateUsedTools(messageObj);
-
-                // If it's an assistant message with content, apply typewriter effect
-                if (messageObj.role === 'assistant' && messageObj.content) {
-                    this.startTypingEffect(messageObj);
-                } else if (messageObj.role === 'tool' && messageObj.content && !messageObj.base64_image && messageObj.class === 'tool-arguments') {
-                    // Add typewriter effect to tool call parameter messages, but exclude screenshot messages
-                    this.startTypingEffect(messageObj);
-                } else {
-                    // If not an assistant message, or has no content, reapply code highlighting
-                    this.$nextTick(() => {
-                        this.applyCodeHighlighting();
-
-                        // If it's a tool message, only scroll the right tool messages container
-                        if (messageObj.role === 'tool' && this.$refs.toolMessagesContainer) {
-                            const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
-                            if (container) {
-                                container.scrollTop = container.scrollHeight;
-                            }
-                        } else {
-                            // Otherwise, scroll all message containers
-                            this.scrollToBottom();
-                        }
-                    });
-                }
-            }
-
-            // After processing all messages, scroll to bottom again
-            // Only scroll if there's no typing effect
-            if (!this.typingInProgress) {
-                this.scrollToBottom();
-            }
-
-            // Check if completed
-            if (this.isProcessing && completed === true) {
-                this.isProcessing = false;
-                this.statusText = 'Connected';
-                this.connectionStatus = 'connected';
-                this.stopPolling(); // This also stops status polling
-
-                // Keep step status displayed (don't reset)
-            }
-        },
-
-        // Update used tools list
-        updateUsedTools(message) {
-            // Only process tool messages
-            if (message.role === 'tool' && message.name) {
-                // Check if the tool is in the availableTools list
-                const tool = this.availableTools.find(t => t.name === message.name);
-                if (tool) {
-                    // Add to the used tools set
-                    this.usedTools.add(message.name);
-
-                    // Update current tool in use
-                    this.currentToolInUse = message.name;
-
-                    // If it's the terminate tool, show notification card
-                    if (message.name.toLowerCase() === 'terminate' && tool.is_special) {
-                        // Check if the execution was successful
-                        const isSuccess = message.content && message.content.toLowerCase().includes('success');
-                        // Show task completion notification card
-                        this.showTaskCompletionCard(isSuccess);
-                    }
-                }
-            }
-
-            // Check tools in tool calls
-            if (message.tool_calls && message.tool_calls.length > 0) {
-                for (const toolCall of message.tool_calls) {
-                    if (toolCall.function && toolCall.function.name) {
-                        // Check if the tool is in the availableTools list
-                        const tool = this.availableTools.find(t => t.name === toolCall.function.name);
-                        if (tool) {
-                            // Add to the used tools set
-                            this.usedTools.add(toolCall.function.name);
-
-                            // Update current tool in use
-                            this.currentToolInUse = toolCall.function.name;
-
-                            // If it's the terminate tool, show notification card
-                            if (toolCall.function.name.toLowerCase() === 'terminate' && tool.is_special) {
-                                // Directly show success notification card, as the result cannot be determined during the tool call phase
-                                this.showTaskCompletionCard(true);
-                            }
-                        }
-                    }
-                }
-            }
-        },
-
-        // Show error message
-        showError(errorMessage) {
-            this.messages.push({
-                role: 'assistant',
-                content: `Error occurred: ${errorMessage}`,
-                time: new Date(),
-                class: 'error-message'
-            });
-
-            // Scroll to bottom
-            this.$nextTick(() => {
-                this.scrollToBottom();
-            });
-        },
-
-        // Terminate session
-        async terminateSession() {
-            if (!this.sessionId) {
-                return;
-            }
-
-            // Update UI status
-            const wasProcessing = this.isProcessing;
-            this.isProcessing = false;
-            this.isConnected = false;
-            this.statusText = 'Terminating...';
-            this.connectionStatus = 'disconnected';
-
-            // Reset step status
-            this.agentStatus = {
-                currentStep: 0,
-                maxSteps: 0,
-                status: ''
-            };
-
-            // Ensure status polling is stopped
-            this.stopStatusPolling();
-
-            // Add terminating message prompt
-            if (wasProcessing) {
-                this.messages.push({
-                    role: 'assistant',
-                    content: 'Terminating session...',
-                    time: new Date(),
-                    class: 'terminating-message'
-                });
-
-                // Scroll to bottom
-                this.$nextTick(() => {
-                    this.scrollToBottom();
-                });
-            }
-
-            try {
-                // Stop polling
-                this.stopPolling();
-
-                // Send termination request
-                const response = await axios.post(`/api/terminate/${this.sessionId}`);
-
-                // Check if the tool output message contains "terminate"
-                const isTerminateSuccess = response.data &&
-                    (response.data.status === 'success' ||
-                        (response.data.message && response.data.message.toLowerCase().includes('success')));
-
-                // Add termination success message
-                this.messages.push({
-                    role: 'assistant',
-                    content: 'Session has been successfully terminated. To continue conversation, please create a new session.',
-                    time: new Date(),
-                    class: 'terminated-message'
-                });
-
-                // Reset session state
-                this.sessionId = null;
-                this.statusText = 'Not connected';
-
-                // Scroll to bottom
-                this.$nextTick(() => {
-                    this.scrollToBottom();
-                });
-            } catch (error) {
-                console.error('Failed to terminate session:', error);
-
-                // If termination fails but was previously processing, show error and restore state
-                if (wasProcessing) {
-                    this.showError('Failed to terminate session, please try again.');
-                    this.isProcessing = true;
-                    this.isConnected = true;
-                    this.statusText = 'Processing...';
-                    this.connectionStatus = 'processing';
-                } else {
-                    // If in idle state and termination fails, just show error
-                    this.showError('Failed to terminate session, please try again.');
-                    this.isConnected = true;
-                    this.statusText = 'Connected';
-                    this.connectionStatus = 'connected';
-                }
-            }
         },
 
         // Show task completion notification card (with eye animation)
@@ -1036,48 +1330,6 @@ const app = Vue.createApp({
             );
         },
 
-        // Format message content
-        formatMessage(content) {
-            if (!content) return '';
-
-            // Get text to format - either the full content or the partial typing text
-            let textToFormat = content;
-            if (this.typingInProgress &&
-                this.currentTypingMessage &&
-                this.currentTypingMessage.content === content) {
-                // Use the current typing text instead of the full message
-                textToFormat = this.typingText;
-            }
-
-            // Always use markdown-it to convert Markdown to HTML
-            const md = window.markdownit();
-            const html = md.render(textToFormat);
-            return html;
-        },
-
-        // Apply code highlighting
-        applyCodeHighlighting() {
-            // Use Prism.js to reapply code highlighting
-            Prism.highlightAll();
-        },
-
-        // Format JSON string
-        formatJson(jsonString) {
-            try {
-                if (typeof jsonString === 'string') {
-                    // Parse JSON string and beautify format
-                    const obj = JSON.parse(jsonString);
-                    return JSON.stringify(obj, null, 2);
-                } else {
-                    // If already an object, just beautify
-                    return JSON.stringify(jsonString, null, 2);
-                }
-            } catch (e) {
-                // If parsing fails, return original string
-                return jsonString;
-            }
-        },
-
         // Format time
         formatTime(time) {
             if (!time) return '';
@@ -1096,22 +1348,22 @@ const app = Vue.createApp({
                 // Scroll the agent messages container
                 if (this.$refs.agentMessagesContainer) {
                     const container = this.$refs.agentMessagesContainer.querySelector('.column-content');
-                    if (container) {
-                        // Only auto-scroll if there's no streaming in progress or user hasn't manually scrolled
-                        if (!this.typingInProgress || !this.userScrolledAgentMessages) {
-                            // Use more reliable scrolling method
-                            container.scrollTop = container.scrollHeight;
-                        }
+                    if (!container) return;
+
+                    // Only auto-scroll if there's no streaming in progress or user hasn't manually scrolled
+                    if (!this.typingInProgress || !this.userScrolledAgentMessages) {
+                        // Use more reliable scrolling method
+                        container.scrollTop = container.scrollHeight;
                     }
                 }
 
                 // Scroll the tool messages container
                 if (this.$refs.toolMessagesContainer && !this.typingInProgress && !this.userScrolledToolMessages) {
                     const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
-                    if (container) {
-                        // Use more reliable scrolling method
-                        container.scrollTop = container.scrollHeight;
-                    }
+                    if (!container) return;
+
+                    // Use more reliable scrolling method
+                    container.scrollTop = container.scrollHeight;
                 }
             });
         },
@@ -1349,9 +1601,8 @@ const app = Vue.createApp({
             this.showCenterNotification('Server restart command has been sent, please wait for the service to recover...', 'info', { duration: 3000 });
         },
 
-        // Show floating notification (reserved for backward compatibility)
+        // Show notification (adapter method for backward compatibility)
         showNotification(message, type = 'info') {
-            // Call central notification card
             this.showCenterNotification(message, type, { duration: 3000 });
         },
 
@@ -1687,6 +1938,113 @@ const app = Vue.createApp({
                 console.error('Failed to get agent status:', error);
             }
         },
+
+        // Terminate session
+        async terminateSession() {
+            if (!this.sessionId) {
+                return;
+            }
+
+            // Update UI status
+            const wasProcessing = this.isProcessing;
+            this.isProcessing = false;
+            this.isConnected = false;
+            this.statusText = 'Terminating...';
+            this.connectionStatus = 'disconnected';
+
+            // Reset step status
+            this.agentStatus = {
+                currentStep: 0,
+                maxSteps: 0,
+                status: ''
+            };
+
+            // Ensure status polling is stopped
+            this.stopStatusPolling();
+
+            // Add terminating message prompt
+            if (wasProcessing) {
+                this.messages.push({
+                    role: 'assistant',
+                    content: 'Terminating session...',
+                    time: new Date(),
+                    class: 'terminating-message'
+                });
+
+                // Scroll to bottom
+                this.$nextTick(() => {
+                    this.scrollToBottom();
+                });
+            }
+
+            try {
+                // Stop polling
+                this.stopPolling();
+
+                // Send termination request
+                const response = await axios.post(`/api/terminate/${this.sessionId}`);
+
+                // Check if the tool output message contains "terminate"
+                const isTerminateSuccess = response.data &&
+                    (response.data.status === 'success' ||
+                        (response.data.message && response.data.message.toLowerCase().includes('success')));
+
+                // Add termination success message
+                this.messages.push({
+                    role: 'assistant',
+                    content: 'Session has been successfully terminated. To continue conversation, please create a new session.',
+                    time: new Date(),
+                    class: 'terminated-message'
+                });
+
+                // Reset session state
+                this.sessionId = null;
+                this.statusText = 'Not connected';
+
+                // Scroll to bottom
+                this.$nextTick(() => {
+                    this.scrollToBottom();
+                });
+            } catch (error) {
+                console.error('Failed to terminate session:', error);
+
+                // If termination fails but was previously processing, show error and restore state
+                if (wasProcessing) {
+                    this.showError('Failed to terminate session, please try again.');
+                    this.isProcessing = true;
+                    this.isConnected = true;
+                    this.statusText = 'Processing...';
+                    this.connectionStatus = 'processing';
+                } else {
+                    // If in idle state and termination fails, just show error
+                    this.showError('Failed to terminate session, please try again.');
+                    this.isConnected = true;
+                    this.statusText = 'Connected';
+                    this.connectionStatus = 'connected';
+                }
+            }
+        },
+
+        // 设置示例任务点击事件
+        setupExampleTasksListener() {
+            // 使用事件委托来处理当前和将来的示例任务点击
+            document.addEventListener('click', (event) => {
+                // 检查点击的元素是否是示例任务
+                if (event.target && event.target.closest('.welcome-tools-examples li')) {
+                    const taskElement = event.target.closest('.welcome-tools-examples li');
+                    // 提取任务文本
+                    const taskText = taskElement.innerText.trim();
+                    // 设置到输入框
+                    this.userInput = taskText;
+                    // 聚焦输入框
+                    this.$nextTick(() => {
+                        if (this.$refs.userInputArea) {
+                            this.$refs.userInputArea.focus();
+                        }
+                    });
+                }
+            });
+        },
     },
 
     beforeUnmount() {
@@ -1699,14 +2057,21 @@ const app = Vue.createApp({
             this.typingTimer = null;
         }
 
-        // Remove event listeners
-        document.removeEventListener('mousemove', this.initMouseTracking);
-        document.removeEventListener('keydown', this.setupKeyboardShortcuts);
+        // Remove event listeners correctly
+        if (this.eventListeners.mouseMoveHandler) {
+            document.removeEventListener('mousemove', this.eventListeners.mouseMoveHandler);
+            this.eventListeners.mouseMoveHandler = null;
+        }
 
-        // Listen for page resize, update message container scrolling
+        if (this.eventListeners.keydownHandler) {
+            document.removeEventListener('keydown', this.eventListeners.keydownHandler);
+            this.eventListeners.keydownHandler = null;
+        }
+
+        // Remove window resize event listener
         window.removeEventListener('resize', this.scrollToBottom);
 
-        // Clear the scroll event listeners for the message containers
+        // Remove scroll event listeners from message containers
         if (this.$refs.toolMessagesContainer) {
             const container = this.$refs.toolMessagesContainer.querySelector('.column-content');
             if (container) {

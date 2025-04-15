@@ -724,15 +724,13 @@ body {
 }
 
 .dark-theme .message.assistant {
-    border-image: var(--border-gradient);
-    border-image-slice: 1;
-    border-left: 1px solid transparent;
+    border-left: none;
+    max-width: 100%;
 }
 
 .dark-theme .message.tool {
-    border-image: var(--border-gradient);
-    border-image-slice: 1;
-    border-left: 1px solid transparent;
+    border-left: none;
+    max-width: 100%;
 }
 
 .dark-theme .message:hover {
@@ -1333,7 +1331,7 @@ body {
 }
 
 .message.assistant {
-    border-left: 3px solid var(--primary-color);
+    border-left: none;
     max-width: 100%;
 }
 
@@ -1355,7 +1353,7 @@ body {
 }
 
 .message.tool {
-    border-left: 3px solid var(--warning-color);
+    border-left: none;
     max-width: 100%;
 }
 
@@ -3096,7 +3094,8 @@ pre {
 
 /* Waiting for user input state styles */
 .waiting-for-input {
-    border-color: #4a90e2 !important;
+    border-left: none !important;
+    border-color: var(--border-color) !important;
     box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3) !important;
     animation: pulse 2s infinite;
 }
@@ -3162,4 +3161,44 @@ pre {
     100% {
         transform: rotate(0deg);
     }
+}
+
+/* 为KaTeX公式添加样式适配 */
+.katex-display {
+    margin: 1em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 5px 0;
+}
+
+.katex {
+    font-size: 1.1em;
+}
+
+.dark-theme .katex .katex-html {
+    color: #f7fafc;
+}
+
+.dark-theme .katex .mord,
+.dark-theme .katex .mbin,
+.dark-theme .katex .mrel,
+.dark-theme .katex .mopen,
+.dark-theme .katex .mclose,
+.dark-theme .katex .mpunct,
+.dark-theme .katex .minner {
+    color: #f7fafc;
+}
+
+.dark-theme .katex-display>.katex>.katex-html>.tag {
+    color: #a0aec0;
+}
+
+/* 确保数学公式在滚动容器中正常显示 */
+.message-content .katex-display {
+    max-width: 100%;
+}
+
+/* 为行内公式添加样式 */
+.katex-inline {
+    padding: 0 0.2em;
 }
