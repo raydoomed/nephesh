@@ -38,11 +38,11 @@ function initLoadingScreen() {
     });
 
     const messages = [
-        "Initializing system components...",
-        "Connecting to neural network...",
-        "Loading AI modules...",
-        "Calibrating response patterns...",
-        "Starting quantum processors..."
+        "正在初始化系统组件...",
+        "正在连接神经网络...",
+        "正在加载AI模块...",
+        "正在校准响应模式...",
+        "正在启动量子处理器..."
     ];
 
     let progress = 0;
@@ -334,7 +334,7 @@ function initVideoPlayer() {
                 playBtn.innerHTML = '<i class="fas fa-pause"></i>';
                 videoWrapper.classList.remove('awaiting-interaction');
             }).catch(e => {
-                console.log('Playback failed:', e);
+                console.log('播放失败:', e);
             });
         } else {
             video.pause();
@@ -350,7 +350,7 @@ function initVideoPlayer() {
                 playBtn.innerHTML = '<i class="fas fa-pause"></i>';
                 videoWrapper.classList.remove('awaiting-interaction');
             }).catch(e => {
-                console.log('Playback failed:', e);
+                console.log('播放失败:', e);
             });
         } else {
             video.pause();
@@ -460,7 +460,7 @@ function initVideoPlayer() {
                         playBtn.innerHTML = '<i class="fas fa-pause"></i>';
                         videoWrapper.classList.remove('awaiting-interaction');
                     }).catch(e => {
-                        console.log('Playback failed:', e);
+                        console.log('播放失败:', e);
                     });
                 }
             }
@@ -782,7 +782,7 @@ document.addEventListener('DOMContentLoaded', function () {
 function resetVisitState() {
     // Clear session state related variables
     sessionStorage.clear();
-    console.log('Visit state has been reset. This will simulate a first-time visit on the next navigation.');
+    console.log('访问状态已重置。在下次导航时将模拟首次访问。');
 }
 
 // Comment out the line below to disable automatic reset (for development use only)

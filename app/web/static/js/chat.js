@@ -107,7 +107,7 @@ const messageHandler = {
                             const toolCallMsg = {
                                 role: 'tool',
                                 name: toolCall.function.name,
-                                content: `Tool call arguments:\n\`\`\`json\n${this.formatJson(toolCall.function.arguments)}\n\`\`\``,
+                                content: `工具调用参数:\n\`\`\`json\n${this.formatJson(toolCall.function.arguments)}\n\`\`\``,
                                 time: new Date(),
                                 class: 'tool-arguments'
                             };
@@ -126,7 +126,7 @@ const messageHandler = {
                 // 如果是工具消息，确保正确的工具名称
                 if (messageObj.base64_image) {
                     // 如果包含截图，将浏览器截图用作工具名称
-                    messageObj.name = messageObj.name || 'Browser Screenshot';
+                    messageObj.name = messageObj.name || '浏览器截图';
                     messageObj.class = (messageObj.class || '') + ' browser-screenshot';
                 } else if (messageObj.tool_calls && messageObj.tool_calls.length > 0) {
                     // 使用工具调用中的名称
@@ -175,7 +175,7 @@ const messageHandler = {
         // 检查是否完成
         if (app.isProcessing && completed === true) {
             app.isProcessing = false;
-            app.statusText = 'Connected';
+            app.statusText = '已连接';
             app.connectionStatus = 'connected';
             app.stopPolling(); // 这也会停止状态轮询
 
@@ -315,7 +315,7 @@ const messageHandler = {
                 }
             }
         } catch (e) {
-            console.warn('Error rendering math with MathJax:', e);
+            console.warn('渲染数学公式时出错:', e);
         }
     },
 
@@ -335,7 +335,7 @@ const messageHandler = {
             }
         } catch (e) {
             // 如果解析失败，返回原始字符串
-            console.warn('JSON parsing failed:', e, jsonString);
+            console.warn('JSON解析失败:', e, jsonString);
             return jsonString || '';
         }
     },
@@ -345,7 +345,7 @@ const messageHandler = {
         // 直接推送到数组
         app.messages.push({
             role: 'assistant',
-            content: `Error occurred: ${errorMessage}`,
+            content: `发生错误: ${errorMessage}`,
             time: new Date(),
             class: 'error-message'
         });
@@ -363,7 +363,7 @@ const app = Vue.createApp({
 
     // 添加配置，告诉Vue哪些标签是MathJax的自定义元素
     compilerOptions: {
-        isCustomElement: tag => tag.startsWith('mjx-') || tag === 'math' || tag === 'mrow' || tag === 'mfrac'
+        isCustomElement: tag => tag.startsWith('mjx-') || tag === 'math' || tag === 'mrow' || tag === 'mfrac' || tag === 'mi' || tag === 'mo'
     },
 
     data() {
@@ -372,7 +372,7 @@ const app = Vue.createApp({
             sessionId: null,
             isConnected: false,
             isProcessing: false,
-            statusText: 'Not connected',
+            statusText: '未连接',
             connectionStatus: 'disconnected',
 
             // Gradient effect toggle
@@ -500,11 +500,11 @@ const app = Vue.createApp({
                 }
             },
             configSections: {
-                llm: { name: 'Large Language Model', icon: 'fa-comment-dots' },
-                browser: { name: 'Browser', icon: 'fa-globe' },
-                search: { name: 'Search Engine', icon: 'fa-search' },
-                sandbox: { name: 'Sandbox', icon: 'fa-cube' },
-                server: { name: 'Server', icon: 'fa-server' }
+                llm: { name: '大语言模型', icon: 'fa-comment-dots' },
+                browser: { name: '浏览器', icon: 'fa-globe' },
+                search: { name: '搜索引擎', icon: 'fa-search' },
+                sandbox: { name: '沙箱环境', icon: 'fa-cube' },
+                server: { name: '服务器', icon: 'fa-server' }
             },
             originalConfig: null,
 
@@ -835,13 +835,13 @@ const app = Vue.createApp({
                     status: ''
                 };
 
-                console.log('Creating new session...');
+                console.log('创建新会话...');
                 const response = await axios.post('/api/session');
-                console.log('Session creation response:', response.data);
+                console.log('会话创建响应:', response.data);
 
                 this.sessionId = response.data.session_id;
                 this.isConnected = true;
-                this.statusText = 'Connected';
+                this.statusText = '已连接';
                 this.connectionStatus = 'connected';
                 this.messages = [];
                 this.usedTools = new Set(); // Reset used tools list
@@ -1056,21 +1056,21 @@ const app = Vue.createApp({
                     this.applyCodeHighlighting();
                 });
 
-                console.log(`New session created successfully, ID: ${this.sessionId}`);
+                console.log(`新会话创建成功，ID: ${this.sessionId}`);
             } catch (error) {
-                console.error('Failed to create session:', error);
+                console.error('创建会话失败:', error);
 
                 // Display more detailed error information
-                let errorMsg = 'Unable to create new session, please try again later.';
+                let errorMsg = '无法创建新会话，请稍后重试。';
                 if (error.response) {
-                    errorMsg += ` Status code: ${error.response.status}`;
+                    errorMsg += ` 状态码: ${error.response.status}`;
                     if (error.response.data && error.response.data.error) {
                         errorMsg += ` - ${error.response.data.error}`;
                     }
                 } else if (error.request) {
-                    errorMsg += ' Server not responding, please check your network connection.';
+                    errorMsg += ' 服务器没有响应，请检查您的网络连接。';
                 } else {
-                    errorMsg += ` Error message: ${error.message}`;
+                    errorMsg += ` 错误信息: ${error.message}`;
                 }
 
                 this.showError(errorMsg);
@@ -1089,13 +1089,13 @@ const app = Vue.createApp({
                         .filter(tool => tool.is_special)
                         .map(tool => tool.name);
 
-                    console.log('Special tools:', this.specialTools);
+                    console.log('特殊工具:', this.specialTools);
 
                     // Add tool loading animation
                     this.animateToolsAppearance();
                 }
             } catch (error) {
-                console.error('Failed to get tools list:', error);
+                console.error('获取工具列表失败:', error);
                 // Don't set default tools list, completely rely on backend data
                 this.availableTools = [];
                 this.specialTools = [];
@@ -1166,41 +1166,41 @@ const app = Vue.createApp({
             try {
                 // Start processing state
                 this.isProcessing = true;
-                this.statusText = 'Processing...';
+                this.statusText = '处理中...';
                 this.connectionStatus = 'processing';
 
                 // Send message to server
-                console.log(`Sending message to: ${axios.defaults.baseURL}/api/chat`);
-                console.log(`Session ID: ${this.sessionId}`);
+                console.log(`发送消息到: ${axios.defaults.baseURL}/api/chat`);
+                console.log(`会话 ID: ${this.sessionId}`);
                 const response = await axios.post('/api/chat', {
                     session_id: this.sessionId,
                     message: userMessage
                 });
 
-                console.log('Server response:', response.data);
+                console.log('服务器响应:', response.data);
 
                 // Start message polling
                 this.startPolling();
             } catch (error) {
-                console.error('Error sending message:', error);
+                console.error('发送消息时出错:', error);
                 this.isProcessing = false;
-                this.statusText = 'Error';
+                this.statusText = '错误';
                 this.connectionStatus = 'error';
 
                 // Display more detailed error information
-                let errorMsg = 'Failed to send message, please try again.';
+                let errorMsg = '发送消息失败，请重试。';
                 if (error.response) {
                     // Server returned an error status code
-                    errorMsg += ` Status code: ${error.response.status}`;
+                    errorMsg += ` 状态码: ${error.response.status}`;
                     if (error.response.data && error.response.data.error) {
                         errorMsg += ` - ${error.response.data.error}`;
                     }
                 } else if (error.request) {
                     // Request was sent but no response received
-                    errorMsg += ' Server not responding, please check your network connection.';
+                    errorMsg += ' 服务器没有响应，请检查您的网络连接。';
                 } else {
                     // Error during request setup
-                    errorMsg += ` Error message: ${error.message}`;
+                    errorMsg += ` 错误信息: ${error.message}`;
                 }
 
                 this.showError(errorMsg);
@@ -1256,30 +1256,30 @@ const app = Vue.createApp({
                     if (response.data.completed) {
                         this.stopPolling();
                         this.isProcessing = false;
-                        this.statusText = 'Connected';
+                        this.statusText = '已连接';
                         this.connectionStatus = 'connected';
                     }
                 } catch (error) {
-                    console.error('Failed to get messages:', error);
+                    console.error('获取消息失败:', error);
                     this.retryCount++;
 
                     if (this.retryCount >= this.maxRetries) {
                         this.stopPolling();
                         this.isProcessing = false;
-                        this.statusText = 'Connected';
+                        this.statusText = '已连接';
                         this.connectionStatus = 'connected';
 
                         // Display more detailed error information
-                        let errorMsg = `Polling for messages failed (retried ${this.retryCount} times)`;
+                        let errorMsg = `轮询消息失败 (已重试 ${this.retryCount} 次)`;
                         if (error.response) {
-                            errorMsg += ` Status code: ${error.response.status}`;
+                            errorMsg += ` 状态码: ${error.response.status}`;
                             if (error.response.data && error.response.data.error) {
                                 errorMsg += ` - ${error.response.data.error}`;
                             }
                         } else if (error.request) {
-                            errorMsg += ' Server not responding';
+                            errorMsg += ' 服务器没有响应';
                         } else {
-                            errorMsg += ` Error: ${error.message}`;
+                            errorMsg += ` 错误: ${error.message}`;
                         }
 
                         this.showError(errorMsg);
@@ -1303,8 +1303,8 @@ const app = Vue.createApp({
         showTaskCompletionCard(isSuccess) {
             // Create notification message for the terminate tool
             const message = isSuccess ?
-                'Session Terminated Successfully!<br>You can now create a new session' :
-                'Session Termination Failed<br>Please try again';
+                '会话成功终止！<br>您现在可以创建一个新会话' :
+                '会话终止失败<br>请重试';
 
             // Show notification card
             this.showCenterNotification(
@@ -1472,8 +1472,8 @@ const app = Vue.createApp({
                     this.originalConfig = JSON.parse(JSON.stringify(this.config));
                 }
             } catch (error) {
-                console.error('Failed to get configuration:', error);
-                this.showError('Failed to get configuration information, please check network connection or server status');
+                console.error('获取配置失败:', error);
+                this.showError('获取配置信息失败，请检查网络连接或服务器状态');
             }
         },
 
@@ -1512,17 +1512,17 @@ const app = Vue.createApp({
 
                     if (reloadSuccess) {
                         if (serverConfigChanged) {
-                            messageContent = `Configuration has been successfully saved! However, the server address or port has been changed, and a restart is required to take effect.`;
+                            messageContent = `配置已成功保存！但是，服务器地址或端口已更改，需要重启才能生效。`;
                             notificationType = 'warning';
                             notificationOptions.showAction = true;
                             notificationOptions.actionType = 'restart';
                             notificationOptions.duration = null; // Not automatically closed
                         } else {
-                            messageContent = `Configuration has been successfully updated, and a new session will be automatically created to apply the new configuration...`;
+                            messageContent = `配置已成功更新，将自动创建新会话以应用新配置...`;
                             notificationType = 'success';
                         }
                     } else {
-                        messageContent = `Configuration has been successfully saved, but the hot reload failed. Some changes may require a server restart to take effect.`;
+                        messageContent = `配置已成功保存，但热重载失败。某些更改可能需要重启服务器才能生效。`;
                         notificationType = 'warning';
                         notificationOptions.showAction = true;
                         notificationOptions.actionType = 'restart';
@@ -1550,8 +1550,8 @@ const app = Vue.createApp({
                     this.scrollToBottom();
                 }
             } catch (error) {
-                console.error('Failed to save configuration:', error);
-                this.showError('Failed to save configuration: ' + (error.response?.data?.error || error.message));
+                console.error('保存配置失败:', error);
+                this.showError('保存配置失败: ' + (error.response?.data?.error || error.message));
             }
         },
 
@@ -1588,7 +1588,7 @@ const app = Vue.createApp({
         restartServer() {
             this.closeCenterNotification();
             // This is a placeholder, the actual implementation may need to call the backend API
-            this.showCenterNotification('Server restart command has been sent, please wait for the service to recover...', 'info', { duration: 3000 });
+            this.showCenterNotification('服务器重启命令已发送，请等待服务恢复...', 'info', { duration: 3000 });
         },
 
         // Show notification (adapter method for backward compatibility)
@@ -1616,11 +1616,11 @@ const app = Vue.createApp({
                 const response = await axios.get('/api/files');
                 if (response.data && response.data.files) {
                     this.workspaceFiles = response.data.files;
-                    this.showNotification('File list has been updated', 'success');
+                    this.showNotification('文件列表已更新', 'success');
                 }
             } catch (error) {
-                console.error('Failed to fetch workspace files:', error);
-                this.showError('Failed to fetch file list, please check network connection or server status');
+                console.error('获取工作区文件失败:', error);
+                this.showError('获取文件列表失败，请检查网络连接或服务器状态');
             }
         },
 
@@ -1636,13 +1636,13 @@ const app = Vue.createApp({
             downloadLink.click();
             document.body.removeChild(downloadLink);
 
-            this.showNotification(`Downloading: ${filePath}`, 'info');
+            this.showNotification(`正在下载: ${filePath}`, 'info');
         },
 
         // Delete file
         async deleteFile(filePath) {
             try {
-                if (!confirm(`Are you sure you want to delete file "${filePath}"? This action cannot be undone.`)) {
+                if (!confirm(`确定要删除文件"${filePath}"吗？此操作无法撤销。`)) {
                     return;
                 }
 
@@ -1654,8 +1654,8 @@ const app = Vue.createApp({
                     this.refreshFiles();
                 }
             } catch (error) {
-                console.error('Failed to delete file:', error);
-                this.showError(error.response?.data?.error || 'Failed to delete file, please try again later');
+                console.error('删除文件失败:', error);
+                this.showError(error.response?.data?.error || '删除文件失败，请稍后重试');
             }
         },
 
@@ -1737,7 +1737,7 @@ const app = Vue.createApp({
         loadFileToInput(file) {
             // Check file type
             if (!file.type.match('text.*') && !file.name.match(/\.(txt|md|json|csv|py|js|html|css|xml)$/i)) {
-                this.showNotification('Only text files can be loaded to input', 'warning');
+                this.showNotification('只能将文本文件加载到输入框', 'warning');
                 return;
             }
 
@@ -1748,11 +1748,11 @@ const app = Vue.createApp({
                 const maxChars = 5000;
                 if (content.length > maxChars) {
                     this.userInput = content.substring(0, maxChars) +
-                        `\n\n[Note: File ${file.name} is too large, only the first ${maxChars} characters are loaded]`;
-                    this.showNotification(`File ${file.name} is too large, only part of the content is loaded`, 'warning');
+                        `\n\n[注意: 文件 ${file.name} 太大，只加载了前 ${maxChars} 个字符]`;
+                    this.showNotification(`文件 ${file.name} 太大，只加载了部分内容`, 'warning');
                 } else {
                     this.userInput = content;
-                    this.showNotification(`File ${file.name} has been loaded to input`, 'success');
+                    this.showNotification(`文件 ${file.name} 已加载到输入框`, 'success');
                 }
 
                 // Automatically focus input
@@ -1762,7 +1762,7 @@ const app = Vue.createApp({
             };
 
             reader.onerror = () => {
-                this.showError(`Failed to read file ${file.name}`);
+                this.showError(`读取文件 ${file.name} 失败`);
             };
 
             reader.readAsText(file);
@@ -1775,7 +1775,7 @@ const app = Vue.createApp({
                 const formData = new FormData();
                 formData.append('file', file);
 
-                this.showNotification(`Uploading file: ${file.name}...`, 'info');
+                this.showNotification(`正在上传文件: ${file.name}...`, 'info');
 
                 // Send file to server
                 const response = await axios.post('/api/files', formData, {
@@ -1785,13 +1785,13 @@ const app = Vue.createApp({
                 });
 
                 if (response.data && response.data.file) {
-                    this.showNotification(`File ${file.name} has been uploaded successfully`, 'success');
+                    this.showNotification(`文件 ${file.name} 已成功上传`, 'success');
                     // Refresh file list
                     this.refreshFiles();
                 }
             } catch (error) {
-                console.error('Failed to upload file:', error);
-                this.showError(error.response?.data?.error || 'Failed to upload file, please try again later');
+                console.error('上传文件失败:', error);
+                this.showError(error.response?.data?.error || '上传文件失败，请稍后重试');
             }
         },
 
@@ -1829,7 +1829,7 @@ const app = Vue.createApp({
 
             // Show notification about toggled status
             this.showNotification(
-                this.gradientEffectEnabled ? 'Blue-red gradient effect has been enabled' : 'Blue-red gradient effect has been disabled',
+                this.gradientEffectEnabled ? '蓝红渐变效果已启用' : '蓝红渐变效果已禁用',
                 'info'
             );
         },
@@ -1904,7 +1904,7 @@ const app = Vue.createApp({
 
                     await this.fetchAgentStatus();
                 } catch (error) {
-                    console.error('Error polling agent status:', error);
+                    console.error('轮询代理状态时出错:', error);
                 }
             }, 1000); // Poll every second
         },
@@ -1925,7 +1925,7 @@ const app = Vue.createApp({
                 this.agentStatus.maxSteps = response.data.max_steps;
                 this.agentStatus.status = response.data.status;
             } catch (error) {
-                console.error('Failed to get agent status:', error);
+                console.error('获取代理状态失败:', error);
             }
         },
 
@@ -1939,7 +1939,7 @@ const app = Vue.createApp({
             const wasProcessing = this.isProcessing;
             this.isProcessing = false;
             this.isConnected = false;
-            this.statusText = 'Terminating...';
+            this.statusText = '正在终止...';
             this.connectionStatus = 'disconnected';
 
             // Reset step status
@@ -1956,7 +1956,7 @@ const app = Vue.createApp({
             if (wasProcessing) {
                 this.messages.push({
                     role: 'assistant',
-                    content: 'Terminating session...',
+                    content: '正在终止会话...',
                     time: new Date(),
                     class: 'terminating-message'
                 });
@@ -1982,34 +1982,34 @@ const app = Vue.createApp({
                 // Add termination success message
                 this.messages.push({
                     role: 'assistant',
-                    content: 'Session has been successfully terminated. To continue conversation, please create a new session.',
+                    content: '会话已成功终止。要继续对话，请创建一个新会话。',
                     time: new Date(),
                     class: 'terminated-message'
                 });
 
                 // Reset session state
                 this.sessionId = null;
-                this.statusText = 'Not connected';
+                this.statusText = '未连接';
 
                 // Scroll to bottom
                 this.$nextTick(() => {
                     this.scrollToBottom();
                 });
             } catch (error) {
-                console.error('Failed to terminate session:', error);
+                console.error('终止会话失败:', error);
 
                 // If termination fails but was previously processing, show error and restore state
                 if (wasProcessing) {
-                    this.showError('Failed to terminate session, please try again.');
+                    this.showError('终止会话失败，请重试。');
                     this.isProcessing = true;
                     this.isConnected = true;
-                    this.statusText = 'Processing...';
+                    this.statusText = '处理中...';
                     this.connectionStatus = 'processing';
                 } else {
                     // If in idle state and termination fails, just show error
-                    this.showError('Failed to terminate session, please try again.');
+                    this.showError('终止会话失败，请重试。');
                     this.isConnected = true;
-                    this.statusText = 'Connected';
+                    this.statusText = '已连接';
                     this.connectionStatus = 'connected';
                 }
             }

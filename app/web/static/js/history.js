@@ -97,15 +97,15 @@ const app = createApp({
 
                 if (response.data && Array.isArray(response.data.history)) {
                     this.historyList = response.data.history;
-                    console.log('History record count:', this.historyList.length);
+                    console.log('历史记录数量:', this.historyList.length);
                 } else {
-                    console.warn('Failed to load history records, incorrect data format:', response.data);
-                    this.errorMessage = 'Failed to load history records, incorrect data format';
+                    console.warn('加载历史记录失败，数据格式不正确:', response.data);
+                    this.errorMessage = '加载历史记录失败，数据格式不正确';
                     this.hasError = true;
                 }
             } catch (error) {
-                console.error('Failed to load history records:', error);
-                this.errorMessage = 'Failed to load history records: ' + (error.response?.data?.error || error.message || 'Unknown error');
+                console.error('加载历史记录失败:', error);
+                this.errorMessage = '加载历史记录失败: ' + (error.response?.data?.error || error.message || '未知错误');
                 this.hasError = true;
             } finally {
                 this.isLoading = false;
@@ -135,13 +135,13 @@ const app = createApp({
                         this.applyCodeHighlighting();
                     });
                 } else {
-                    console.warn('Failed to get session details, incorrect data format:', response.data);
-                    this.errorMessage = 'Failed to load session details, incorrect data format';
+                    console.warn('获取会话详情失败，数据格式不正确:', response.data);
+                    this.errorMessage = '加载会话详情失败，数据格式不正确';
                     this.hasError = true;
                 }
             } catch (error) {
-                console.error('Failed to get session details:', error);
-                this.errorMessage = 'Failed to get session details: ' + (error.response?.data?.error || error.message || 'Unknown error');
+                console.error('获取会话详情失败:', error);
+                this.errorMessage = '获取会话详情失败: ' + (error.response?.data?.error || error.message || '未知错误');
                 this.hasError = true;
             } finally {
                 this.isLoading = false;
@@ -158,8 +158,8 @@ const app = createApp({
         // Delete single session
         confirmDeleteSession(sessionId) {
             this.createConfirmDialog(
-                'Delete session',
-                'Are you sure you want to delete this session record? This action cannot be undone.',
+                '删除会话',
+                '确定要删除此会话记录吗？此操作无法撤消。',
                 () => this.deleteSession(sessionId)
             );
         },
@@ -171,13 +171,13 @@ const app = createApp({
                 if (response.data && response.data.success) {
                     // Remove from list
                     this.historyList = this.historyList.filter(item => item.session_id !== sessionId);
-                    this.showNotification('Session record deleted successfully');
+                    this.showNotification('会话记录删除成功');
                 } else {
-                    this.showNotification('Failed to delete session record: ' + (response.data.error || 'Unknown error'), 'error');
+                    this.showNotification('删除会话记录失败: ' + (response.data.error || '未知错误'), 'error');
                 }
             } catch (error) {
-                console.error('Failed to delete session:', error);
-                this.showNotification('Failed to delete session: ' + (error.response?.data?.error || error.message || 'Unknown error'), 'error');
+                console.error('删除会话失败:', error);
+                this.showNotification('删除会话失败: ' + (error.response?.data?.error || error.message || '未知错误'), 'error');
             } finally {
                 this.isLoading = false;
             }
@@ -186,8 +186,8 @@ const app = createApp({
         // Clear all history records
         confirmClearHistory() {
             this.createConfirmDialog(
-                'Clear all history records',
-                'Are you sure you want to clear all history records? This action cannot be undone.',
+                '清空所有历史记录',
+                '确定要清空所有历史记录吗？此操作无法撤消。',
                 () => this.clearHistory()
             );
         },
@@ -198,13 +198,13 @@ const app = createApp({
                 const response = await axios.delete('/api/history');
                 if (response.data && response.data.success) {
                     this.historyList = [];
-                    this.showNotification('All history records have been cleared successfully');
+                    this.showNotification('所有历史记录已成功清空');
                 } else {
-                    this.showNotification('Failed to clear history: ' + (response.data.error || 'Unknown error'), 'error');
+                    this.showNotification('清空历史记录失败: ' + (response.data.error || '未知错误'), 'error');
                 }
             } catch (error) {
-                console.error('Failed to clear history:', error);
-                this.showNotification('Failed to clear history: ' + (error.response?.data?.error || error.message || 'Unknown error'), 'error');
+                console.error('清空历史记录失败:', error);
+                this.showNotification('清空历史记录失败: ' + (error.response?.data?.error || error.message || '未知错误'), 'error');
             } finally {
                 this.isLoading = false;
             }
@@ -213,7 +213,7 @@ const app = createApp({
         // Export single session record
         async exportSession(sessionId, format) {
             if (!sessionId) {
-                this.showNotification('Invalid session ID', 'error');
+                this.showNotification('无效的会话ID', 'error');
                 return;
             }
 
@@ -228,7 +228,7 @@ const app = createApp({
                     // Create print window
                     const printWindow = window.open('', '_blank');
                     if (!printWindow) {
-                        this.showNotification('Unable to open the print window. Please check if your browser is blocking pop-ups.', 'error');
+                        this.showNotification('无法打开打印窗口。请检查浏览器是否阻止了弹出窗口。', 'error');
                         this.isLoading = false;
                         return;
                     }
@@ -239,7 +239,7 @@ const app = createApp({
                     <html>
                     <head>
                         <meta charset="UTF-8">
-                        <title>OpenManus Session Record - ${sessionId.substring(0, 8)}</title>
+                        <title>OpenManus 会话记录 - ${sessionId.substring(0, 8)}</title>
                         <style>
                             body { font-family: Arial, sans-serif; margin: 20px; }
                             h1 { color: #4361ee; }
@@ -262,9 +262,9 @@ const app = createApp({
                         </style>
                     </head>
                     <body>
-                        <h1>OpenManus Session Record</h1>
-                        <p><strong>Session ID:</strong> ${sessionData.session_id}</p>
-                        <p><strong>Created at:</strong> ${sessionData.created_at}</p>
+                        <h1>OpenManus 会话记录</h1>
+                        <p><strong>会话ID:</strong> ${sessionData.session_id}</p>
+                        <p><strong>创建时间:</strong> ${sessionData.created_at}</p>
                         <hr>
                     `;
 
@@ -277,13 +277,13 @@ const app = createApp({
                         if (role === 'user') {
                             htmlContent += `
                             <div class="user-message">
-                                <div class="message-header">User:</div>
+                                <div class="message-header">用户:</div>
                                 <div>${this.formatContent(content)}</div>
                             </div>`;
                         } else if (role === 'assistant') {
                             htmlContent += `
                             <div class="assistant-message">
-                                <div class="message-header">Assistant:</div>
+                                <div class="message-header">助手:</div>
                                 <div>${this.formatContent(content)}</div>
                             </div>`;
 
@@ -302,10 +302,10 @@ const app = createApp({
                                 htmlContent += `</div>`;
                             }
                         } else if (role === 'tool') {
-                            const toolName = msg.name || 'Unknown tool';
+                            const toolName = msg.name || '未知工具';
                             htmlContent += `
                             <div class="tool-message">
-                                <div class="message-header">Tool (${toolName}):</div>
+                                <div class="message-header">工具 (${toolName}):</div>
                                 <pre>${content}</pre>
                             </div>`;
 
@@ -316,7 +316,7 @@ const app = createApp({
                                     if (toolCall.function && toolCall.function.name) {
                                         htmlContent += `
                                         <div class="tool-call">
-                                            <div class="tool-call-header">Tool Call: ${toolCall.function.name}</div>
+                                            <div class="tool-call-header">工具调用: ${toolCall.function.name}</div>
                                             <pre class="tool-call-args">${this.formatJson(toolCall.function.arguments)}</pre>
                                         </div>`;
                                     }
@@ -344,10 +344,10 @@ const app = createApp({
                     printWindow.document.write(htmlContent);
                     printWindow.document.close();
 
-                    this.showNotification('Preparing to print, please select "Microsoft Print to PDF" as the printer');
+                    this.showNotification('准备打印，请选择"Microsoft打印为PDF"作为打印机');
                 } catch (error) {
-                    console.error('Export session record failed:', error);
-                    this.showNotification('Export failed: ' + (error.response?.data?.error || error.message || 'Unknown error'), 'error');
+                    console.error('导出会话记录失败:', error);
+                    this.showNotification('导出失败: ' + (error.response?.data?.error || error.message || '未知错误'), 'error');
                 } finally {
                     this.isLoading = false;
                 }
@@ -395,10 +395,10 @@ const app = createApp({
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
 
-                this.showNotification(`Session record exported successfully as ${format.toUpperCase()} format`);
+                this.showNotification(`会话记录已成功导出为${format.toUpperCase()}格式`);
             } catch (error) {
-                console.error('Export session record failed:', error);
-                this.showNotification('Export failed: ' + (error.response?.data?.error || error.message || 'Unknown error'), 'error');
+                console.error('导出会话记录失败:', error);
+                this.showNotification('导出失败: ' + (error.response?.data?.error || error.message || '未知错误'), 'error');
             } finally {
                 this.isLoading = false;
             }
@@ -502,12 +502,12 @@ const app = createApp({
 
             const cancelBtn = document.createElement('button');
             cancelBtn.className = 'secondary-btn';
-            cancelBtn.textContent = 'Cancel';
+            cancelBtn.textContent = '取消';
             cancelBtn.onclick = () => document.body.removeChild(overlay);
 
             const confirmBtn = document.createElement('button');
             confirmBtn.className = 'secondary-btn danger-btn';
-            confirmBtn.textContent = 'Confirm';
+            confirmBtn.textContent = '确认';
             confirmBtn.onclick = () => {
                 document.body.removeChild(overlay);
                 if (confirmCallback) confirmCallback();
@@ -569,7 +569,7 @@ const app = createApp({
                         });
                     }
                 } catch (e) {
-                    console.warn('Failed to parse time:', timestamp);
+                    console.warn('解析时间失败:', timestamp);
                 }
             }
 
@@ -644,7 +644,7 @@ const app = createApp({
                 }
             } catch (e) {
                 // If parsing fails, return original string
-                console.warn('JSON parsing failed:', e);
+                console.warn('JSON解析失败:', e);
                 return jsonData;
             }
         },

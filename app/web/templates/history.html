@@ -4,28 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenManus - History Records</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <title>OpenManus - 历史记录</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
-    <!-- Import Axios for HTTP requests -->
+    <!-- 导入Axios用于HTTP请求 -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <!-- Import Vue.js -->
+    <!-- 导入Vue.js -->
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.js"></script>
-    <!-- Import Font Awesome icons -->
+    <!-- 导入Font Awesome图标 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Import Prism for code highlighting -->
+    <!-- 导入Prism用于代码高亮 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
-    <!-- Import Google Fonts -->
+    <!-- 导入Google字体 -->
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-    <!-- Add page favicon -->
+    <!-- 添加页面图标 -->
     <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
-    <!-- Add Meta theme color -->
+    <!-- 添加主题颜色元标签 -->
     <meta name="theme-color" content="#0c1426">
 </head>
 
 <body>
-    <!-- Page loading animation -->
+    <!-- 页面加载动画 -->
     <div id="page-loader">
         <div class="loader-content">
             <div class="spinner">
@@ -33,12 +33,12 @@
                 <div class="bounce2"></div>
                 <div class="bounce3"></div>
             </div>
-            <p>System starting...</p>
+            <p>系统启动中...</p>
         </div>
     </div>
 
     <div id="app">
-        <!-- Navigation bar -->
+        <!-- 导航栏 -->
         <nav class="main-nav">
             <div class="nav-container">
                 <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
@@ -48,86 +48,85 @@
                 </a>
 
                 <div class="nav-controls">
-                    <a href="/chat" class="nav-button" title="Back to chat">
+                    <a href="/chat" class="nav-button" title="返回聊天">
                         <i class="fas fa-comment"></i>
                     </a>
 
-                    <button class="theme-toggle" @click="toggleTheme"
-                        :title="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'">
+                    <button class="theme-toggle" @click="toggleTheme" :title="isDarkTheme ? '切换到浅色模式' : '切换到深色模式'">
                         <i class="fas" :class="isDarkTheme ? 'fa-moon' : 'fa-sun'"></i>
                     </button>
 
-                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank"
-                        title="Visit the GitHub project repository" class="github-nav-link">
+                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank" title="访问GitHub项目仓库"
+                        class="github-nav-link">
                         <i class="fab fa-github"></i>
                     </a>
                 </div>
             </div>
         </nav>
 
-        <!-- Main content area -->
+        <!-- 主内容区域 -->
         <div class="history-container">
-            <!-- Back button, only shown when viewing details -->
-            <button v-if="selectedSession" @click="backToList" class="nav-button back-button" title="Back to list">
+            <!-- 返回按钮，仅在查看详情时显示 -->
+            <button v-if="selectedSession" @click="backToList" class="nav-button back-button" title="返回列表">
                 <i class="fas fa-arrow-left"></i>
             </button>
 
-            <!-- Loading status prompt -->
+            <!-- 加载状态提示 -->
             <div v-if="isLoading" class="loading-state">
                 <div class="spinner">
                     <div class="bounce1"></div>
                     <div class="bounce2"></div>
                     <div class="bounce3"></div>
                 </div>
-                <p>Loading...</p>
+                <p>加载中...</p>
             </div>
 
-            <!-- Error prompt -->
+            <!-- 错误提示 -->
             <div v-if="hasError" class="error-message">
                 <i class="fas fa-exclamation-circle"></i>
                 <span>${errorMessage}</span>
             </div>
 
-            <!-- History list page -->
+            <!-- 历史列表页面 -->
             <div v-if="!selectedSession && !isLoading" class="history-list-view">
                 <div class="history-header">
-                    <h2 class="history-title">History Session Records</h2>
+                    <h2 class="history-title">历史会话记录</h2>
                     <div class="history-actions">
                         <button @click="confirmClearHistory" class="secondary-btn danger-btn"
                             :disabled="isLoading || historyList.length === 0">
                             <i class="fas fa-trash"></i>
-                            Clear
+                            清空
                         </button>
                         <button @click="refreshHistory" class="secondary-btn" :disabled="isLoading">
                             <i class="fas" :class="[isLoading ? 'fa-spinner fa-spin' : 'fa-sync-alt']"></i>
-                            ${isLoading ? 'Loading...' : 'Refresh'}
+                            ${isLoading ? '加载中...' : '刷新'}
                         </button>
                     </div>
                 </div>
 
-                <!-- Empty history prompt -->
+                <!-- 空历史提示 -->
                 <div v-if="historyList.length === 0 && !hasError" class="empty-history">
                     <i class="fas fa-history"></i>
-                    <p class="empty-history-text">No history records</p>
+                    <p class="empty-history-text">没有历史记录</p>
                 </div>
 
-                <!-- History record list -->
+                <!-- 历史记录列表 -->
                 <div v-else class="history-list">
                     <div v-for="item in historyList" :key="item.session_id" class="history-item">
                         <div class="history-item-header">
-                            <span class="history-item-session">Session ID: ${item.session_id.substring(0, 8)}...</span>
+                            <span class="history-item-session">会话ID: ${item.session_id.substring(0, 8)}...</span>
                             <span class="history-item-date">${formatDate(item.created_at)}</span>
                         </div>
                         <div class="history-item-prompt">${item.first_prompt}</div>
                         <div class="history-item-meta">
-                            <span>${item.prompt_count} instructions</span>
+                            <span>${item.prompt_count} 条指令</span>
                             <div class="history-item-actions">
                                 <button @click.stop="viewSessionDetail(item.session_id)" class="text-btn">
-                                    <i class="fas fa-eye"></i> View
+                                    <i class="fas fa-eye"></i> 查看
                                 </button>
                                 <button @click.stop="confirmDeleteSession(item.session_id)"
                                     class="text-btn text-danger">
-                                    <i class="fas fa-trash"></i> Delete
+                                    <i class="fas fa-trash"></i> 删除
                                 </button>
                             </div>
                         </div>
@@ -135,22 +134,22 @@
                 </div>
             </div>
 
-            <!-- Session details page -->
+            <!-- 会话详情页面 -->
             <div v-if="selectedSession && !isLoading" class="history-detail-view">
                 <div class="history-detail">
                     <div class="history-detail-header">
-                        <h3 class="history-detail-title">Session Details</h3>
-                        <div class="history-detail-session">Session ID: ${sessionDetail.session_id}</div>
+                        <h3 class="history-detail-title">会话详情</h3>
+                        <div class="history-detail-session">会话ID: ${sessionDetail.session_id}</div>
                         <div class="history-detail-date">
-                            Start time: ${formatDate(sessionDetail.created_at)}
+                            开始时间: ${formatDate(sessionDetail.created_at)}
                             <span v-if="sessionDetail.completed_at">
-                                | End time: ${formatDate(sessionDetail.completed_at)}
+                                | 结束时间: ${formatDate(sessionDetail.completed_at)}
                             </span>
                         </div>
                         <div class="history-detail-actions">
                             <div class="export-dropdown">
                                 <button class="secondary-btn">
-                                    <i class="fas fa-download"></i> Export
+                                    <i class="fas fa-download"></i> 导出
                                 </button>
                                 <div class="export-dropdown-content">
                                     <button @click="exportSession(sessionDetail.session_id, 'json')"
@@ -166,8 +165,7 @@
                                         <i class="fas fa-file-alt"></i> Markdown
                                     </button>
                                     <button @click="exportSession(sessionDetail.session_id, 'pdf')"
-                                        class="export-option"
-                                        title="Export PDF using system printer (e.g. Microsoft Print to PDF)">
+                                        class="export-option" title="使用系统打印机导出PDF（如Microsoft打印为PDF）">
                                         <i class="fas fa-file-pdf"></i> PDF
                                     </button>
                                 </div>
@@ -175,35 +173,35 @@
                         </div>
                     </div>
 
-                    <!-- User prompt list -->
-                    <h4>User Instructions (${sessionDetail.prompts.length})</h4>
+                    <!-- 用户提示列表 -->
+                    <h4>用户指令 (${sessionDetail.prompts.length})</h4>
                     <div v-for="(prompt, index) in sessionDetail.prompts" :key="'p-'+index"
                         class="history-message user">
-                        <div class="history-message-role">User</div>
+                        <div class="history-message-role">用户</div>
                         <div class="history-message-time">${formatDate(prompt.time)}</div>
                         <div class="history-message-content">${prompt.content}</div>
                     </div>
 
-                    <!-- Message record -->
-                    <h4>Full conversation record (${sessionDetail.messages.length})</h4>
+                    <!-- 消息记录 -->
+                    <h4>完整对话记录 (${sessionDetail.messages.length})</h4>
                     <div v-for="(message, index) in sessionDetail.messages" :key="'m-'+index"
                         :class="['history-message', message.role]">
                         <div class="history-message-role">
                             ${message.role === 'assistant' ? 'Manus' :
-                            message.role === 'user' ? 'User' :
-                            message.role === 'tool' ? 'Tool' : message.role}
+                            message.role === 'user' ? '用户' :
+                            message.role === 'tool' ? '工具' : message.role}
                             <span v-if="message.role === 'tool' && message.name"
                                 class="tool-name">(${message.name})</span>
                         </div>
                         <div class="history-message-time">${formatTime(message.time)}</div>
                         <div class="history-message-content" v-html="formatMessage(message.content)"></div>
 
-                        <!-- Tool call parameters section -->
+                        <!-- 工具调用参数部分 -->
                         <div v-if="message.tool_calls && message.tool_calls.length > 0" class="tool-calls-container">
                             <div v-for="(toolCall, toolIndex) in message.tool_calls" :key="'tc-'+index+'-'+toolIndex"
                                 class="tool-call">
                                 <div class="tool-call-header">
-                                    <span class="tool-call-name">Tool call: ${toolCall.function.name}</span>
+                                    <span class="tool-call-name">工具调用: ${toolCall.function.name}</span>
                                 </div>
                                 <pre
                                     class="tool-call-args"><code class="language-json">${formatJson(toolCall.function.arguments)}</code></pre>

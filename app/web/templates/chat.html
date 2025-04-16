@@ -4,18 +4,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenManus - AI Intelligent Assistant</title>
+    <title>OpenManus - AI智能助手</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
-    <!-- Import Axios for HTTP requests -->
+    <!-- 导入Axios用于HTTP请求 -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <!-- Import Vue.js -->
+    <!-- 导入Vue.js -->
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.js"></script>
-    <!-- Import Font Awesome icons -->
+    <!-- 导入Font Awesome图标 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Import Prism for code highlighting -->
+    <!-- 导入Prism用于代码高亮 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
-    <!-- Import MathJax for math rendering -->
+    <!-- 导入MathJax用于数学公式渲染 -->
     <script type="text/javascript">
         window.MathJax = {
             tex: {
@@ -32,17 +32,17 @@
     <script type="text/javascript" id="MathJax-script" async
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
         </script>
-    <!-- Import Google Fonts -->
+    <!-- 导入Google字体 -->
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-    <!-- Add page favicon -->
+    <!-- 添加页面图标 -->
     <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
-    <!-- Add Meta theme color -->
+    <!-- 添加主题颜色元标签 -->
     <meta name="theme-color" content="#0c1426">
 </head>
 
 <body>
-    <!-- Page loading animation -->
+    <!-- 页面加载动画 -->
     <div id="page-loader">
         <div class="loader-content">
             <div class="spinner">
@@ -50,12 +50,12 @@
                 <div class="bounce2"></div>
                 <div class="bounce3"></div>
             </div>
-            <p>System starting...</p>
+            <p>系统启动中...</p>
         </div>
     </div>
 
     <div id="app">
-        <!-- New navigation bar design -->
+        <!-- 新导航栏设计 -->
         <nav class="main-nav">
             <div class="nav-container">
                 <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
@@ -65,13 +65,13 @@
                 </a>
 
                 <div class="nav-controls">
-                    <!-- Session ID display -->
+                    <!-- 会话ID显示 -->
                     <div class="session-id-display">
                         <i class="fas fa-fingerprint"></i>
-                        <span>${sessionId || 'Not connected'}</span>
+                        <span>${sessionId || '未连接'}</span>
                     </div>
 
-                    <!-- Add notification area in navbar -->
+                    <!-- 在导航栏中添加通知区域 -->
                     <div class="navbar-notification-area" v-if="navbarNotification.show">
                         <div class="navbar-notification" :class="navbarNotification.type">
                             <div class="notification-icon">
@@ -83,53 +83,50 @@
                         </div>
                     </div>
 
-                    <!-- Connection status -->
+                    <!-- 连接状态 -->
                     <div class="status-container" :class="connectionStatus">
                         <span class="status-dot"></span>
                         <span class="status-text">${statusText}</span>
                     </div>
 
-                    <!-- Add history button -->
+                    <!-- 添加历史按钮 -->
                     <a href="/history" class="nav-button" title="历史记录">
                         <i class="fas fa-history"></i>
                     </a>
 
-                    <button class="theme-toggle" @click="toggleTheme"
-                        :title="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'">
+                    <button class="theme-toggle" @click="toggleTheme" :title="isDarkTheme ? '切换到浅色模式' : '切换到深色模式'">
                         <i class="fas" :class="isDarkTheme ? 'fa-moon' : 'fa-sun'"></i>
                     </button>
 
-                    <!-- Add configuration button -->
+                    <!-- 添加配置按钮 -->
                     <button class="config-toggle" @click="toggleConfigPanel" :title="'系统配置'">
                         <i class="fas fa-wrench"></i>
                     </button>
 
-                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank"
-                        title="Visit the GitHub project repository" class="github-nav-link">
+                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank" title="访问GitHub项目仓库"
+                        class="github-nav-link">
                         <i class="fab fa-github"></i>
                     </a>
                 </div>
             </div>
         </nav>
 
-        <!-- Main workspace -->
+        <!-- 主工作区 -->
         <div class="workspace">
-            <!-- Sidebar toolbar -->
+            <!-- 侧边栏工具箱 -->
             <div class="toolbox">
-                <!-- Welcome panel -->
+                <!-- 欢迎面板 -->
                 <div class="tool-section system-info">
                     <div class="tool-header">
                         <i class="fas fa-info-circle"></i>
-                        <h3>System Information</h3>
+                        <h3>系统信息</h3>
                     </div>
                     <div class="info-content">
                         <p class="system-info-text">
-                            <span class="system-highlight">OpenManus</span> <span class="system-emoji">✨</span> is an
-                            intelligent agent platform based on
-                            large language models <span class="system-emoji">🤖</span>, integrating diverse tool
-                            capabilities <span class="system-emoji">🛠️</span>, supporting complex task
-                            execution <span class="system-emoji">🚀</span> and automation processes <span
-                                class="system-emoji">⚙️</span>.
+                            <span class="system-highlight">OpenManus</span> <span class="system-emoji">✨</span> 是一个基于
+                            大语言模型 <span class="system-emoji">🤖</span> 的智能代理平台，集成了多种工具
+                            能力 <span class="system-emoji">🛠️</span>，支持复杂任务
+                            执行 <span class="system-emoji">🚀</span> 和自动化流程 <span class="system-emoji">⚙️</span>。
                         </p>
                     </div>
                 </div>
@@ -137,33 +134,33 @@
                 <div class="tool-section">
                     <div class="tool-header">
                         <i class="fas fa-bolt"></i>
-                        <h3>Session Control</h3>
+                        <h3>会话控制</h3>
                     </div>
                     <div class="tool-buttons">
                         <button @click="createNewSession" class="primary-btn">
                             <i class="fas fa-plus"></i>
-                            <span>New Session</span>
+                            <span>新会话</span>
                         </button>
                         <button @click="terminateSession" :disabled="!isConnected" class="secondary-btn">
                             <i class="fas"
                                 :class="[isProcessing && !isConnected ? 'fa-spinner fa-spin' : 'fa-stop']"></i>
-                            <span>${isProcessing && !isConnected ? 'Terminating' : 'Terminate'}</span>
+                            <span>${isProcessing && !isConnected ? '终止中' : '终止'}</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- New File Browser Tool -->
+                <!-- 新文件浏览器工具 -->
                 <div class="tool-section">
                     <div class="tool-header">
                         <i class="fas fa-folder-open"></i>
-                        <h3>File Browser</h3>
-                        <button @click="refreshFiles" class="refresh-btn" title="Refresh file list">
+                        <h3>文件浏览器</h3>
+                        <button @click="refreshFiles" class="refresh-btn" title="刷新文件列表">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
                     <div class="workspace-files">
                         <div v-if="workspaceFiles.length === 0" class="no-files">
-                            <p>No files in workspace</p>
+                            <p>工作区中没有文件</p>
                         </div>
                         <ul v-else class="files-list">
                             <li v-for="file in workspaceFiles" :key="file.path" class="file-item">
@@ -173,12 +170,11 @@
                                     <div class="file-size">${formatFileSize(file.size)}</div>
                                 </div>
                                 <div class="file-actions">
-                                    <button @click="downloadFile(file.path)" class="file-action-btn"
-                                        title="Download file">
+                                    <button @click="downloadFile(file.path)" class="file-action-btn" title="下载文件">
                                         <i class="fas fa-download"></i>
                                     </button>
                                     <button @click="deleteFile(file.path)" class="file-action-btn delete-btn"
-                                        title="Delete file">
+                                        title="删除文件">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
@@ -187,11 +183,11 @@
                     </div>
                 </div>
 
-                <!-- Tool List Section -->
+                <!-- 工具列表部分 -->
                 <div class="tool-section tools-container">
                     <div class="tool-header">
                         <i class="fas fa-tools"></i>
-                        <h3>Tool List</h3>
+                        <h3>工具列表</h3>
                     </div>
 
                     <div class="tools-panel">
@@ -204,11 +200,11 @@
                                 </div>
                             </li>
                         </ul>
-                        <p v-else class="no-tools">No tools loaded</p>
+                        <p v-else class="no-tools">没有加载工具</p>
                     </div>
                 </div>
 
-                <!-- Copyright Section -->
+                <!-- 版权部分 -->
                 <div class="tool-section copyright-section">
                     <div class="copyright-content">
                         <p>© OpenManus</p>
@@ -216,26 +212,26 @@
                 </div>
             </div>
 
-            <!-- Chat area -->
+            <!-- 聊天区域 -->
             <div class="chat-section">
-                <!-- Current task display -->
+                <!-- 当前任务显示 -->
                 <div class="current-task" v-if="lastUserMessage">
                     <div class="task-label">
                         <i class="fas fa-tasks"></i>
-                        <span>Current Task:</span>
+                        <span>当前任务:</span>
                     </div>
                     <div class="task-content">
                         <span v-html="formatMessage(lastUserMessage.content)"></span>
                     </div>
                 </div>
 
-                <!-- Message display area - converted to two-column layout -->
+                <!-- 消息显示区域 - 转换为两列布局 -->
                 <div class="messages-container-split">
-                    <!-- Left side - Manus Agent -->
+                    <!-- 左侧 - Manus 代理 -->
                     <div class="messages-column agent-messages" ref="agentMessagesContainer">
                         <div class="column-header">
                             <i class="fas fa-robot"></i>
-                            <span>Manus Agent</span>
+                            <span>Manus 代理</span>
                         </div>
 
                         <div class="column-content">
@@ -250,7 +246,7 @@
                                 <div class="message-content" v-html="formatMessage(message.content)"></div>
                             </div>
 
-                            <!-- Agent message loading status -->
+                            <!-- 代理消息加载状态 -->
                             <div v-if="isProcessing" class="processing-indicator">
                                 <div class="thinking-container">
                                     <div class="manus-eyes-animation">
@@ -258,24 +254,24 @@
                                         <div class="manus-eye"></div>
                                     </div>
                                     <span class="thinking-text" v-if="agentStatus.currentStep > 0">
-                                        Manus is processing... (Step ${agentStatus.currentStep}/${agentStatus.maxSteps})
+                                        Manus 正在处理中... (步骤 ${agentStatus.currentStep}/${agentStatus.maxSteps})
                                     </span>
                                     <span class="thinking-text" v-else>
-                                        Manus is thinking...
+                                        Manus 正在思考...
                                     </span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Input area inside agent panel -->
+                        <!-- 代理面板内输入区域 -->
                         <div class="agent-input-area">
                             <div class="input-container">
                                 <textarea v-model="userInput" @keydown.enter.ctrl="sendMessage"
-                                    :disabled="isProcessing || !isConnected"
-                                    placeholder="Enter command, Ctrl+Enter to send" ref="userInputArea"></textarea>
+                                    :disabled="isProcessing || !isConnected" placeholder="输入命令，Ctrl+Enter 发送"
+                                    ref="userInputArea"></textarea>
 
                                 <div class="input-actions">
-                                    <button class="action-btn" title="Upload File" @click.stop="openUploadModal">
+                                    <button class="action-btn" title="上传文件" @click.stop="openUploadModal">
                                         <i class="fas fa-paperclip"></i>
                                     </button>
                                     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none">
@@ -288,7 +284,7 @@
                         </div>
                     </div>
 
-                    <!-- Right side - OpenManus -->
+                    <!-- 右侧 - OpenManus -->
                     <div class="messages-column tool-messages" ref="toolMessagesContainer"
                         v-show="toolMessages.length > 0">
                         <div class="column-header">
@@ -296,12 +292,12 @@
                             <span>OpenManus</span>
                         </div>
 
-                        <!-- Current tool in use display -->
+                        <!-- 当前使用工具显示 -->
                         <div class="current-tool-display" v-if="currentToolInUse">
                             <i v-if="currentToolInUse === 'terminate'" class="fas fa-check-circle completed-icon"></i>
                             <i v-else class="fas fa-cog"></i>
-                            <span v-if="currentToolInUse === 'terminate'">Manus is completed</span>
-                            <span v-else>Manus in use: ${currentToolInUse}</span>
+                            <span v-if="currentToolInUse === 'terminate'">Manus 已完成</span>
+                            <span v-else>Manus 正在使用: ${currentToolInUse}</span>
                         </div>
 
                         <div class="column-content">
@@ -310,25 +306,25 @@
                                 <div class="message-header">
                                     <div class="message-role">
                                         <i class="fas fa-tools"></i>
-                                        <span>${message.name || 'Tool Output'}</span>
+                                        <span>${message.name || '工具输出'}</span>
                                     </div>
                                     <span class="message-time">${formatTime(message.time)}</span>
                                 </div>
 
                                 <div class="message-content">
-                                    <!-- Image display -->
+                                    <!-- 图像显示 -->
                                     <div v-if="message.base64_image" class="image-container">
                                         <div class="screenshot-note">
-                                            <i class="fas fa-info-circle"></i> Current visible area screenshot
+                                            <i class="fas fa-info-circle"></i> 当前可见区域截图
                                         </div>
-                                        <img :src="'data:image/png;base64,' + message.base64_image" alt="Screenshot"
+                                        <img :src="'data:image/png;base64,' + message.base64_image" alt="截图"
                                             class="message-image" @click="expandImage">
                                     </div>
 
-                                    <!-- Text content -->
+                                    <!-- 文本内容 -->
                                     <div v-if="message.content" v-html="formatMessage(message.content)"></div>
 
-                                    <!-- Tool call display -->
+                                    <!-- 工具调用显示 -->
                                     <div v-if="message.tool_calls && message.tool_calls.length > 0" class="tool-calls">
                                         <div v-for="(tool, toolIndex) in message.tool_calls" :key="toolIndex"
                                             class="tool-call">
@@ -348,11 +344,11 @@
             </div>
         </div>
 
-        <!-- File upload modal -->
+        <!-- 文件上传弹窗 -->
         <div class="upload-modal" v-if="showUploadModal" @click.self="closeUploadModal">
             <div class="upload-modal-content">
                 <div class="upload-modal-header">
-                    <h3><i class="fas fa-upload"></i> Select upload method</h3>
+                    <h3><i class="fas fa-upload"></i> 选择上传方式</h3>
                     <button class="close-btn" @click="closeUploadModal">
                         <i class="fas fa-times"></i>
                     </button>
@@ -363,8 +359,8 @@
                             <i class="fas fa-folder"></i>
                         </div>
                         <div class="option-text">
-                            <h4>Upload to workspace</h4>
-                            <p>Files will be saved to the server and can be used in multiple sessions</p>
+                            <h4>上传到工作区</h4>
+                            <p>文件将保存到服务器，可在多个会话中使用</p>
                         </div>
                     </div>
                     <div class="upload-option-card" @click="triggerFileUpload('input')">
@@ -372,19 +368,18 @@
                             <i class="fas fa-file-import"></i>
                         </div>
                         <div class="option-text">
-                            <h4>Load to input</h4>
-                            <p>File content will be loaded directly to the input box, making it easier for direct
-                                analysis</p>
+                            <h4>加载到输入框</h4>
+                            <p>文件内容将直接加载到输入框中，便于直接分析</p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Configuration panel -->
+        <!-- 配置面板 -->
         <div class="config-panel" :class="{ 'active': showConfigPanel }">
             <div class="config-panel-header">
-                <h2><i class="fas fa-wrench"></i> System Configuration</h2>
+                <h2><i class="fas fa-wrench"></i> 系统配置</h2>
                 <button @click="toggleConfigPanel" class="close-btn">
                     <i class="fas fa-times"></i>
                 </button>
@@ -400,150 +395,150 @@
                 </div>
 
                 <div class="config-tab-content">
-                    <!-- LLM Configuration -->
+                    <!-- LLM配置 -->
                     <div v-if="currentConfigTab === 'llm'" class="config-section">
-                        <h3>LLM Configuration</h3>
+                        <h3>LLM配置</h3>
                         <div class="form-group">
-                            <label for="llm-model">Model Name</label>
+                            <label for="llm-model">模型名称</label>
                             <input type="text" id="llm-model" v-model="config.llm.model">
                         </div>
                         <div class="form-group">
-                            <label for="llm-base-url">API Base URL</label>
+                            <label for="llm-base-url">API基础URL</label>
                             <input type="text" id="llm-base-url" v-model="config.llm.base_url">
                         </div>
                         <div class="form-group">
-                            <label for="llm-api-key">API Key</label>
+                            <label for="llm-api-key">API密钥</label>
                             <input type="password" id="llm-api-key" v-model="config.llm.api_key">
                         </div>
                         <div class="form-group">
-                            <label for="llm-max-tokens">Max Tokens</label>
+                            <label for="llm-max-tokens">最大令牌数</label>
                             <input type="number" id="llm-max-tokens" v-model.number="config.llm.max_tokens">
                         </div>
                         <div class="form-group">
-                            <label for="llm-temperature">Temperature</label>
+                            <label for="llm-temperature">温度</label>
                             <input type="number" id="llm-temperature" v-model.number="config.llm.temperature" step="0.1"
                                 min="0" max="2">
                         </div>
                         <div class="form-group">
-                            <label for="llm-stream">Stream Response</label>
+                            <label for="llm-stream">流式响应</label>
                             <input type="checkbox" id="llm-stream" v-model="config.llm.stream">
                         </div>
 
-                        <!-- Vision model configuration -->
-                        <h3>Vision Model Configuration</h3>
+                        <!-- 视觉模型配置 -->
+                        <h3>视觉模型配置</h3>
                         <div class="form-group">
-                            <label for="vision-model">Vision Model Name</label>
+                            <label for="vision-model">视觉模型名称</label>
                             <input type="text" id="vision-model" v-model="config.llm.vision.model">
                         </div>
                         <div class="form-group">
-                            <label for="vision-base-url">Vision API Base URL</label>
+                            <label for="vision-base-url">视觉API基础URL</label>
                             <input type="text" id="vision-base-url" v-model="config.llm.vision.base_url">
                         </div>
                         <div class="form-group">
-                            <label for="vision-api-key">Vision API Key</label>
+                            <label for="vision-api-key">视觉API密钥</label>
                             <input type="password" id="vision-api-key" v-model="config.llm.vision.api_key">
                         </div>
                         <div class="form-group">
-                            <label for="vision-max-tokens">Vision Max Tokens</label>
+                            <label for="vision-max-tokens">视觉最大令牌数</label>
                             <input type="number" id="vision-max-tokens" v-model.number="config.llm.vision.max_tokens">
                         </div>
                         <div class="form-group">
-                            <label for="vision-temperature">Vision Temperature</label>
+                            <label for="vision-temperature">视觉温度</label>
                             <input type="number" id="vision-temperature" v-model.number="config.llm.vision.temperature"
                                 step="0.1" min="0" max="2">
                         </div>
                     </div>
 
-                    <!-- Browser configuration -->
+                    <!-- 浏览器配置 -->
                     <div v-if="currentConfigTab === 'browser'" class="config-section">
-                        <h3>Browser Configuration</h3>
+                        <h3>浏览器配置</h3>
                         <div class="form-group">
-                            <label for="browser-headless">Headless Mode</label>
+                            <label for="browser-headless">无头模式</label>
                             <input type="checkbox" id="browser-headless" v-model="config.browser.headless">
                         </div>
                         <div class="form-group">
-                            <label for="browser-disable-security">Disable Security Features</label>
+                            <label for="browser-disable-security">禁用安全功能</label>
                             <input type="checkbox" id="browser-disable-security"
                                 v-model="config.browser.disable_security">
                         </div>
-                        <!-- Proxy configuration -->
-                        <h4>Proxy Configuration</h4>
+                        <!-- 代理配置 -->
+                        <h4>代理配置</h4>
                         <div class="form-group">
-                            <label for="proxy-server">Proxy Server</label>
+                            <label for="proxy-server">代理服务器</label>
                             <input type="text" id="proxy-server" v-model="proxyServerConfig">
                         </div>
                         <div class="form-group">
-                            <label for="proxy-username">Username</label>
+                            <label for="proxy-username">用户名</label>
                             <input type="text" id="proxy-username" v-model="proxyUsernameConfig">
                         </div>
                         <div class="form-group">
-                            <label for="proxy-password">Password</label>
+                            <label for="proxy-password">密码</label>
                             <input type="password" id="proxy-password" v-model="proxyPasswordConfig">
                         </div>
                     </div>
 
-                    <!-- Search configuration -->
+                    <!-- 搜索配置 -->
                     <div v-if="currentConfigTab === 'search'" class="config-section">
-                        <h3>Search Configuration</h3>
+                        <h3>搜索配置</h3>
                         <div class="form-group">
-                            <label for="search-engine">Search Engine</label>
+                            <label for="search-engine">搜索引擎</label>
                             <select id="search-engine" v-model="config.search.engine">
-                                <option value="Google">Google</option>
-                                <option value="Baidu">Baidu</option>
+                                <option value="Google">谷歌</option>
+                                <option value="Baidu">百度</option>
                                 <option value="DuckDuckGo">DuckDuckGo</option>
-                                <option value="Bing">Bing</option>
+                                <option value="Bing">必应</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="search-retry-delay">Retry Delay (seconds)</label>
+                            <label for="search-retry-delay">重试延迟（秒）</label>
                             <input type="number" id="search-retry-delay" v-model.number="config.search.retry_delay">
                         </div>
                         <div class="form-group">
-                            <label for="search-max-retries">Max Retries</label>
+                            <label for="search-max-retries">最大重试次数</label>
                             <input type="number" id="search-max-retries" v-model.number="config.search.max_retries">
                         </div>
                     </div>
 
-                    <!-- Sandbox configuration -->
+                    <!-- 沙箱配置 -->
                     <div v-if="currentConfigTab === 'sandbox'" class="config-section">
-                        <h3>Sandbox Configuration</h3>
+                        <h3>沙箱配置</h3>
                         <div class="form-group">
-                            <label for="sandbox-use-sandbox">Enable Sandbox</label>
+                            <label for="sandbox-use-sandbox">启用沙箱</label>
                             <input type="checkbox" id="sandbox-use-sandbox" v-model="config.sandbox.use_sandbox">
                         </div>
                         <div class="form-group">
-                            <label for="sandbox-image">Image</label>
+                            <label for="sandbox-image">镜像</label>
                             <input type="text" id="sandbox-image" v-model="config.sandbox.image">
                         </div>
                         <div class="form-group">
-                            <label for="sandbox-memory-limit">Memory Limit</label>
+                            <label for="sandbox-memory-limit">内存限制</label>
                             <input type="text" id="sandbox-memory-limit" v-model="config.sandbox.memory_limit">
                         </div>
                         <div class="form-group">
-                            <label for="sandbox-cpu-limit">CPU Limit</label>
+                            <label for="sandbox-cpu-limit">CPU限制</label>
                             <input type="number" id="sandbox-cpu-limit" v-model.number="config.sandbox.cpu_limit"
                                 step="0.1">
                         </div>
                         <div class="form-group">
-                            <label for="sandbox-timeout">Timeout (seconds)</label>
+                            <label for="sandbox-timeout">超时（秒）</label>
                             <input type="number" id="sandbox-timeout" v-model.number="config.sandbox.timeout">
                         </div>
                         <div class="form-group">
-                            <label for="sandbox-network-enabled">Enable Network</label>
+                            <label for="sandbox-network-enabled">启用网络</label>
                             <input type="checkbox" id="sandbox-network-enabled"
                                 v-model="config.sandbox.network_enabled">
                         </div>
                     </div>
 
-                    <!-- Server configuration -->
+                    <!-- 服务器配置 -->
                     <div v-if="currentConfigTab === 'server'" class="config-section">
-                        <h3>Server Configuration</h3>
+                        <h3>服务器配置</h3>
                         <div class="form-group">
-                            <label for="server-host">Host Address</label>
+                            <label for="server-host">主机地址</label>
                             <input type="text" id="server-host" v-model="config.server.host">
                         </div>
                         <div class="form-group">
-                            <label for="server-port">Port Number</label>
+                            <label for="server-port">端口号</label>
                             <input type="number" id="server-port" v-model.number="config.server.port">
                         </div>
                     </div>
@@ -551,23 +546,23 @@
 
                 <div class="config-actions">
                     <button @click="saveConfig" class="save-btn primary-btn">
-                        <i class="fas fa-save"></i> Save Configuration
+                        <i class="fas fa-save"></i> 保存配置
                     </button>
                     <button @click="resetConfig" class="reset-btn secondary-btn">
-                        <i class="fas fa-undo"></i> Reset
+                        <i class="fas fa-undo"></i> 重置
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Image preview modal -->
+        <!-- 图像预览弹窗 -->
         <div class="image-modal" v-if="showImageModal" @click="closeModal">
             <div class="image-modal-content">
-                <img :src="modalImage" alt="Full size image">
+                <img :src="modalImage" alt="全尺寸图像">
             </div>
         </div>
 
-        <!-- Central notification card -->
+        <!-- 中央通知卡片 -->
         <transition name="fade">
             <div class="center-notification" v-if="centerNotification.show" :class="centerNotification.type">
                 <div class="center-notification-content">
@@ -580,28 +575,28 @@
                 <div class="notification-actions" v-if="centerNotification.showAction">
                     <button v-if="centerNotification.actionType === 'restart'" class="primary-btn"
                         @click="restartServer">
-                        Restart Server
+                        重启服务器
                     </button>
                     <button v-if="centerNotification.actionType === 'newSession'" class="primary-btn"
                         @click="createNewSession">
-                        New Session
+                        新会话
                     </button>
                     <button class="secondary-btn" @click="closeCenterNotification">
-                        I know
+                        我知道了
                     </button>
                 </div>
             </div>
         </transition>
 
-        <!-- Add floating control buttons -->
-        <!-- Add gradient effect toggle button -->
+        <!-- 添加浮动控制按钮 -->
+        <!-- 添加渐变效果切换按钮 -->
         <div class="gradient-toggle" @click="toggleGradientEffect" :class="{'gradient-active': gradientEffectEnabled}"
             style="display:none;" id="gradient-toggle-btn">
             <i class="fas fa-paint-brush"></i>
         </div>
     </div>
 
-    <!-- Prism.js for code highlighting -->
+    <!-- Prism.js用于代码高亮 -->
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
@@ -612,15 +607,15 @@
     <!-- 主应用脚本 -->
     <script type="module" src="{{ url_for('static', filename='js/chat.js') }}"></script>
 
-    <!-- Page loading script -->
+    <!-- 页面加载脚本 -->
     <script>
-        // Hide loading animation after page loads
+        // 页面加载后隐藏加载动画
         window.addEventListener('load', function () {
             setTimeout(function () {
                 document.getElementById('page-loader').style.opacity = '0';
                 setTimeout(function () {
                     document.getElementById('page-loader').style.display = 'none';
-                    // Show gradient effect button
+                    // 显示渐变效果按钮
                     const gradientBtn = document.getElementById('gradient-toggle-btn');
                     if (gradientBtn && document.body.classList.contains('dark-theme')) {
                         gradientBtn.style.display = 'flex';
