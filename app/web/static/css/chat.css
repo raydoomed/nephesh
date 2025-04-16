@@ -3163,42 +3163,48 @@ pre {
     }
 }
 
-/* 为KaTeX公式添加样式适配 */
-.katex-display {
+/* 为MathJax公式添加样式适配 */
+.MathJax {
+    font-size: 110% !important;
+}
+
+.dark-theme .MathJax {
+    color: #f7fafc !important;
+}
+
+.message-content .MathJax-Display {
     margin: 1em 0;
     overflow-x: auto;
-    overflow-y: hidden;
-    padding: 5px 0;
-}
-
-.katex {
-    font-size: 1.1em;
-}
-
-.dark-theme .katex .katex-html {
-    color: #f7fafc;
-}
-
-.dark-theme .katex .mord,
-.dark-theme .katex .mbin,
-.dark-theme .katex .mrel,
-.dark-theme .katex .mopen,
-.dark-theme .katex .mclose,
-.dark-theme .katex .mpunct,
-.dark-theme .katex .minner {
-    color: #f7fafc;
-}
-
-.dark-theme .katex-display>.katex>.katex-html>.tag {
-    color: #a0aec0;
-}
-
-/* 确保数学公式在滚动容器中正常显示 */
-.message-content .katex-display {
     max-width: 100%;
 }
 
-/* 为行内公式添加样式 */
-.katex-inline {
-    padding: 0 0.2em;
+/* 确保行内公式与文本对齐 */
+.mjx-chtml.MJXc-display {
+    margin: 1em 0 !important;
+    padding: 0.5em 0;
+    overflow-x: auto;
+}
+
+.mjx-math {
+    padding: 1px 0;
+}
+
+.dark-theme .mjx-math {
+    color: #f7fafc !important;
+}
+
+/* SVG输出适配 */
+.dark-theme svg.mjx-svg-href {
+    fill: #f7fafc;
+}
+
+.message-content .MathJax_SVG_Display {
+    margin: 1em 0;
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.message-content .MathJax_SVG {
+    display: inline-block;
+    max-width: 100%;
 }

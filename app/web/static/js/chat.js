@@ -291,18 +291,6 @@ const messageHandler = {
             }
         });
 
-        // 添加KaTeX插件以支持数学公式
-        if (window.markdownitKatex) {
-            try {
-                md.use(window.markdownitKatex, {
-                    throwOnError: false,
-                    errorColor: '#cc0000'
-                });
-            } catch (e) {
-                console.error("Error configuring markdown-it-katex:", e);
-            }
-        }
-
         // 渲染Markdown为HTML
         const html = md.render(textToFormat);
         return html;
@@ -313,24 +301,15 @@ const messageHandler = {
         // 使用Prism.js重新应用代码高亮
         Prism.highlightAll();
 
-        // 确保KaTeX公式也能正确渲染
+        // 使用MathJax渲染数学公式
         try {
-            if (typeof renderMathInElement === 'function') {
-                const elements = document.querySelectorAll('.message-content');
-                elements.forEach(element => {
-                    renderMathInElement(element, {
-                        delimiters: [
-                            { left: "$$", right: "$$", display: true },
-                            { left: "$", right: "$", display: false },
-                            { left: "\\(", right: "\\)", display: false },
-                            { left: "\\[", right: "\\]", display: true }
-                        ],
-                        throwOnError: false
-                    });
-                });
+            // 如果MathJax已加载，则执行公式处理
+            if (window.MathJax) {
+                // 如果是新添加的公式，需要调用typeset来处理
+                window.MathJax.typeset();
             }
         } catch (e) {
-            console.warn('Error rendering math:', e);
+            console.warn('Error rendering math with MathJax:', e);
         }
     },
 

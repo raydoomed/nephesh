@@ -15,17 +15,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Import Prism for code highlighting -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
-    <!-- Import KaTeX for math rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-    <!-- Import KaTeX auto-render extension -->
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-    <!-- Import markdown-it-katex plugin -->
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it-katex@2.0.3/dist/markdown-it-katex.min.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            window.renderMathInElement = renderMathInElement;
-        });
+    <!-- Import MathJax for math rendering -->
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+        </script>
+    <script type="text/javascript">
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
     </script>
     <!-- Import Google Fonts -->
     <link rel="stylesheet"
