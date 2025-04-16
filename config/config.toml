@@ -12,10 +12,10 @@ server = ""
 username = ""
 
 [llm]
-api_key = "sk-xxxxxxxx"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "sk-275ba5a42a5441e5afbb6bb7618dc523"
+base_url = "https://api.deepseek.com/v1"
 max_tokens = 4096
-model = "qwen-plus"
+model = "deepseek-chat"
 stream = false
 temperature = 0
 
