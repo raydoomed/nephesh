@@ -1,6 +1,5 @@
-<p align="center">
-  <img src="assets/logo.jpg" width="200"/>
-</p>
+![image](https://github.com/user-attachments/assets/c2894aff-aeb2-43cf-91c6-059ee6a210e5)
+
 
 English | [中文](README_zh.md) | [한국어](README_ko.md) | [日本語](README_ja.md)
 
