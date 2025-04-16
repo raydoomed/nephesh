@@ -12,7 +12,9 @@ function preprocessMathFormulas(text) {
 
     // 使用正则表达式找到并替换多种格式的数学公式
     // 注意：这个正则需要处理多行文本和嵌套结构
+    // 修改正则表达式，排除\left[和\right]的情况
     const mathRegex = /\[([\s\S]*?)\]/g;
+
     // 修改正则表达式，更精确匹配圆括号中的集合基数表达式
     const parensRegex = /\([ \t]*\|([\s\S]*?)\|[ \t]*\)/g;
     // 增加另一种模式匹配：直接识别类似(|A|)的文本
@@ -80,14 +82,56 @@ function preprocessMathFormulas(text) {
         return `$$\\begin{${envType}${star}}${content}\\end{${envType}${star}}$$`;
     };
 
-    // 首先处理方括号格式的公式
-    let processedText = text.replace(mathRegex, (match, formulaContent) => {
-        // 只替换看起来像数学公式的内容
-        if (isMathFormula(formulaContent)) {
-            return `$$${formulaContent}$$`;
+    // 使用完整LaTeX结构检测，避免处理\left[...\right]结构
+    let processedText = text;
+
+    // 先识别并标记所有的\left[...\right]结构
+    const leftRightPairs = [];
+    const leftRightRegex = /\\left\s*\[([^]*?)\\right\s*\]/g;
+    let leftRightMatch;
+
+    while ((leftRightMatch = leftRightRegex.exec(processedText)) !== null) {
+        leftRightPairs.push({
+            start: leftRightMatch.index,
+            end: leftRightMatch.index + leftRightMatch[0].length
+        });
+    }
+
+    // 现在处理普通方括号，但避开\left[...\right]结构
+    const bracketMatches = [];
+    let match;
+
+    while ((match = mathRegex.exec(text)) !== null) {
+        const fullMatch = match[0];
+        const content = match[1];
+        const startIndex = match.index;
+        const endIndex = startIndex + fullMatch.length;
+
+        // 检查这个方括号是否在任何\left[...\right]结构内
+        const isInLatexStructure = leftRightPairs.some(pair =>
+            (startIndex >= pair.start && startIndex < pair.end) ||
+            (endIndex > pair.start && endIndex <= pair.end) ||
+            (startIndex <= pair.start && endIndex >= pair.end)
+        );
+
+        // 如果不在LaTeX结构内，且看起来像数学公式，则添加到替换列表
+        if (!isInLatexStructure && isMathFormula(content)) {
+            bracketMatches.push({
+                start: startIndex,
+                end: endIndex,
+                original: fullMatch,
+                replacement: `$$${content}$$`
+            });
         }
-        return match; // 不是数学公式，保持原样
-    });
+    }
+
+    // 从后向前替换，以避免索引变化的问题
+    for (let i = bracketMatches.length - 1; i >= 0; i--) {
+        const m = bracketMatches[i];
+        processedText = processedText.substring(0, m.start) +
+            m.replacement +
+            processedText.substring(m.end);
+    }
 
     // 处理圆括号内带有绝对值的公式，如 (|A \cup B|)
     processedText = processedText.replace(parensRegex, (match, formulaContent) => {

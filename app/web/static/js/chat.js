@@ -305,8 +305,14 @@ const messageHandler = {
         try {
             // 如果MathJax已加载，则执行公式处理
             if (window.MathJax) {
-                // 如果是新添加的公式，需要调用typeset来处理
-                window.MathJax.typeset();
+                // 判断MathJax版本并使用正确的API
+                if (window.MathJax.version && window.MathJax.version[0] === '3') {
+                    // MathJax v3 API
+                    window.MathJax.typeset && window.MathJax.typeset();
+                } else {
+                    // MathJax v2 API
+                    window.MathJax.Hub && window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub]);
+                }
             }
         } catch (e) {
             console.warn('Error rendering math with MathJax:', e);
@@ -354,6 +360,11 @@ const messageHandler = {
 // Vue application
 const app = Vue.createApp({
     delimiters: ['${', '}'],  // Custom delimiters to avoid conflicts with Flask template syntax
+
+    // 添加配置，告诉Vue哪些标签是MathJax的自定义元素
+    compilerOptions: {
+        isCustomElement: tag => tag.startsWith('mjx-') || tag === 'math' || tag === 'mrow' || tag === 'mfrac'
+    },
 
     data() {
         return {
