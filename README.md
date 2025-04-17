@@ -1,4 +1,5 @@
-![image](https://github.com/user-attachments/assets/c2894aff-aeb2-43cf-91c6-059ee6a210e5)
+![image](https://github.com/user-attachments/assets/73375b4e-86a5-49b5-a8b8-1afee63b7ada)
+
 
 
 English | [中文](README_zh.md) | [한국어](README_ko.md) | [日本語](README_ja.md)
