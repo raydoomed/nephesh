@@ -8,12 +8,13 @@ import threading
 import time
 from functools import wraps
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request
 
 from app.agent.manus import Manus
 from app.config import config
 from app.logger import logger
 from app.schema import Message
+
 
 # Disable werkzeug default access logs
 werkzeug_logger = logging.getLogger("werkzeug")
@@ -1263,9 +1264,9 @@ def export_session(session_id, format):
     # Choose export method based on format
     if format == "json":
         response = jsonify(session_data)
-        response.headers["Content-Disposition"] = (
-            f"attachment; filename=session-{session_id[:8]}.json"
-        )
+        response.headers[
+            "Content-Disposition"
+        ] = f"attachment; filename=session-{session_id[:8]}.json"
         return response
 
     elif format == "txt":
