@@ -42,9 +42,9 @@
         <nav class="main-nav">
             <div class="nav-container">
                 <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
-                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo_Gradient.png') }}' : '{{ url_for('static', filename='images/logo_black.png') }}'"
-                        alt="OpenManus Logo" class="logo">
-                    <h1>OpenManus <span class="version-badge">Beta</span></h1>
+                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo.png') }}' : '{{ url_for('static', filename='images/logo.png') }}'"
+                        alt="Nephesh Logo" class="logo">
+                    <h1>Nephesh <span class="version-badge">Beta</span></h1>
                 </a>
 
                 <div class="nav-controls">
@@ -56,7 +56,7 @@
                         <i class="fas" :class="isDarkTheme ? 'fa-moon' : 'fa-sun'"></i>
                     </button>
 
-                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank" title="访问GitHub项目仓库"
+                    <a href="https://github.com/raydoomed/OpenManus" target="_blank" title="访问GitHub项目仓库"
                         class="github-nav-link">
                         <i class="fab fa-github"></i>
                     </a>

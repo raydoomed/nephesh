@@ -218,14 +218,16 @@ body {
 }
 
 .chat-section {
-    background-color: var(--background-color);
-    display: flex;
     flex: 1;
+    display: flex;
     flex-direction: column;
     height: auto;
     overflow: hidden;
     position: relative;
     min-height: 500px;
+    transition: all 0.3s ease;
+    width: calc(100% - 300px);
+    /* 默认宽度 */
 }
 
 .close-button {
@@ -1236,11 +1238,13 @@ body {
     border-bottom: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     color: var(--text-color);
-    height: 48px;
+    height: 64px;
+    left: 0;
     position: fixed;
+    right: 0;
     top: 0;
-    width: 100%;
-    z-index: 100;
+    z-index: 1000;
+    /* 确保导航栏在最上层 */
 }
 
 .message {
@@ -2280,14 +2284,15 @@ body {
 }
 
 .toolbox {
-    background-color: var(--sidebar-bg);
+    width: 300px;
+    min-width: 300px;
+    background-color: var(--background-color);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     height: 100%;
-    overflow: hidden;
-    transition: all 0.3s ease;
-    width: 300px;
+    overflow-y: auto;
+    transition: transform 0.3s ease, margin-left 0.3s ease, min-width 0.3s ease;
 }
 
 .tools-container {
@@ -2476,6 +2481,9 @@ body {
     display: flex;
     height: calc(100vh - 64px);
     margin-top: 64px;
+    overflow: hidden;
+    width: 100%;
+    /* 确保工作区占据全宽 */
 }
 
 #page-loader {
@@ -3207,4 +3215,114 @@ pre {
 .message-content .MathJax_SVG {
     display: inline-block;
     max-width: 100%;
+}
+
+/* 侧边栏切换按钮样式 */
+.toggle-sidebar-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    margin: 10px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.toggle-sidebar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: rotate(90deg);
+}
+
+.dark-theme .toggle-sidebar-btn {
+    color: var(--text-color);
+}
+
+.dark-theme .toggle-sidebar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 保持导航栏按钮一致的样式 */
+.nav-button {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    margin-right: 5px;
+}
+
+.nav-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .nav-button {
+    color: var(--text-color);
+}
+
+.dark-theme .nav-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 侧边栏开启按钮样式 */
+.show-sidebar-btn {
+    position: fixed;
+    top: 75px;
+    /* 定位在导航栏下方 */
+    left: 10px;
+    z-index: 90;
+    background: #202123;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.show-sidebar-btn:hover {
+    background: #2b2c30;
+}
+
+/* 侧边栏隐藏样式 */
+.toolbox.hidden {
+    transform: translateX(-100%);
+}
+
+/* 确保聊天区域在侧边栏关闭时能铺满 */
+.toolbox.hidden+.chat-section {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* 侧边栏隐藏时的过渡效果 */
+.toolbox {
+    transition: transform 0.3s ease;
+    width: 300px;
+    min-width: 300px;
+}
+
+.toolbox.hidden {
+    transform: translateX(-300px);
+    margin-left: -300px;
+    /* 确保侧边栏完全隐藏并释放空间 */
+    min-width: 0;
+}
+
+/* 当侧边栏隐藏时聊天区域占据全部宽度 */
+.toolbox.hidden~.chat-section {
+    width: 100%;
 }

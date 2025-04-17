@@ -536,7 +536,10 @@ const app = Vue.createApp({
             eventListeners: {
                 mouseMoveHandler: null,
                 keydownHandler: null
-            }
+            },
+
+            // 添加侧边栏显示状态控制
+            showSidebar: true,
         };
     },
 
@@ -644,6 +647,12 @@ const app = Vue.createApp({
         this.$nextTick(() => {
             this.setupExampleTasksListener();
         });
+
+        // 从本地存储加载侧边栏状态
+        const savedSidebarState = localStorage.getItem('nephesh_sidebar_visible');
+        if (savedSidebarState !== null) {
+            this.showSidebar = savedSidebarState === 'true';
+        }
     },
 
     methods: {
@@ -722,10 +731,10 @@ const app = Vue.createApp({
                 root.style.setProperty('--text-secondary', '#a0aec0');
                 root.style.setProperty('--border-color', '#4a5568');
                 document.body.classList.add('dark-theme');
-                // Use logo_Gradient.png in dark mode
+                // Use logo.png in dark mode
                 const logoElement = document.querySelector('.logo');
                 if (logoElement) {
-                    logoElement.src = '/static/images/logo_Gradient.png';
+                    logoElement.src = '/static/images/logo.png';
                 }
 
                 // 检查用户偏好再应用渐变效果设置
@@ -748,7 +757,7 @@ const app = Vue.createApp({
                 // Use logo_black.png in light mode
                 const logoElement = document.querySelector('.logo');
                 if (logoElement) {
-                    logoElement.src = '/static/images/logo_black.png';
+                    logoElement.src = '/static/images/logo.png';
                 }
             }
 
@@ -858,9 +867,11 @@ const app = Vue.createApp({
                 const welcomeMessage = {
                     role: 'assistant',
                     content: `<div class="welcome-header">
-<h1>你好！我是 Manus 智能助手 👋</h1>
+<div class="nephesh-header-bg"></div>
+<img src="/static/images/logo.png" alt="Nephesh Logo" class="welcome-logo">
+<h1 class="welcome-title">你好！我是 Nephesh</h1>
 
-<p>我可以帮助你完成各种任务。以下是我的一些核心能力：</p>
+<p style="position: relative; z-index: 2;">我可以帮助你完成各种任务。以下是我的一些核心能力：</p>
 </div>
 
 <style>
@@ -868,16 +879,125 @@ const app = Vue.createApp({
   text-align: center;
   margin-bottom: 20px;
   max-width: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 20px;
 }
-.welcome-header h1 {
+
+/* 深色模式样式 */
+.dark-theme .welcome-header {
+  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: darkPulseShadow 5s infinite alternate;
+}
+
+@keyframes darkPulseShadow {
+  0% { box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+  100% { box-shadow: 0 15px 35px rgba(66, 153, 225, 0.2); }
+}
+
+/* 浅色模式样式 */
+body:not(.dark-theme) .welcome-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e2e8f0 100%);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.07);
+  animation: lightPulseShadow 5s infinite alternate;
+}
+
+@keyframes lightPulseShadow {
+  0% { box-shadow: 0 10px 25px rgba(0,0,0,0.07); }
+  100% { box-shadow: 0 15px 35px rgba(66, 153, 225, 0.15); }
+}
+
+.nephesh-header-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  animation: moveBg 15s infinite alternate ease-in-out;
+}
+
+/* 深色模式背景 */
+.dark-theme .nephesh-header-bg {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(66, 153, 225, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(237, 100, 166, 0.1) 0%, transparent 50%);
+}
+
+/* 浅色模式背景 */
+body:not(.dark-theme) .nephesh-header-bg {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(66, 153, 225, 0.25) 0%, transparent 60%),
+    radial-gradient(circle at 80% 70%, rgba(237, 100, 166, 0.15) 0%, transparent 60%);
+}
+
+@keyframes moveBg {
+  0% { transform: scale(1) rotate(0deg); opacity: 0.7; }
+  100% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+}
+
+.welcome-logo {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 0;
+  position: relative;
+  z-index: 2;
+}
+
+/* 深色模式Logo */
+.dark-theme .welcome-logo {
+  filter: drop-shadow(0 0 8px rgba(66, 153, 225, 0.5));
+}
+
+/* 浅色模式Logo */
+body:not(.dark-theme) .welcome-logo {
+  filter: drop-shadow(0 0 10px rgba(66, 153, 225, 0.3));
+}
+
+.welcome-title {
+  margin-top: 5px;
   font-size: 2em;
   margin-bottom: 12px;
   font-weight: 600;
+  position: relative;
+  z-index: 2;
 }
-.welcome-header p {
+
+/* 深色模式标题 */
+.dark-theme .welcome-title {
+  background: linear-gradient(90deg, #63b3ed 0%, #ed64a6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* 浅色模式标题 */
+body:not(.dark-theme) .welcome-title {
+  background: linear-gradient(90deg, #3182ce 0%, #d53f8c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.welcome-subtitle {
   font-size: 1.1em;
   margin-top: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+/* 深色模式副标题 */
+.dark-theme .welcome-subtitle {
   color: var(--text-secondary);
+}
+
+/* 浅色模式副标题 */
+body:not(.dark-theme) .welcome-subtitle {
+  color: #4a5568;
 }
 </style>
 
@@ -972,10 +1092,10 @@ const app = Vue.createApp({
 
 .welcome-tools-examples li {
   background-color: rgba(240, 240, 250, 0.5);
-  padding: 10px 15px;
-  border-radius: 20px;
+  padding: 8px 12px;
+  border-radius: 16px;
   display: inline-block;
-  font-size: 0.9em;
+  font-size: 0.8em;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
@@ -999,7 +1119,10 @@ const app = Vue.createApp({
 }
 </style>
 
-## 💡 示例任务
+<h5 style="font-size: 0.85rem; margin-top: 15px; margin-bottom: 10px; font-weight: 600; display: flex; align-items: center;">
+  <span style="font-size: 0.85rem;">💡</span>
+  <span style="margin-left: 5px;">示例任务</span>
+</h5>
 
 <ul class="welcome-tools-examples">
   <li>📈 帮我分析这个Excel数据并生成趋势图表</li>
@@ -2033,6 +2156,33 @@ const app = Vue.createApp({
                         }
                     });
                 }
+            });
+        },
+
+        // 添加或更新侧边栏切换方法
+        toggleSidebar() {
+            this.showSidebar = !this.showSidebar;
+
+            // 保存侧边栏状态到本地存储
+            localStorage.setItem('nephesh_sidebar_visible', this.showSidebar);
+
+            // 确保DOM更新后进行布局调整
+            this.$nextTick(() => {
+                // 手动触发窗口调整事件以确保布局正确响应
+                window.dispatchEvent(new Event('resize'));
+
+                // 调整聊天容器的布局
+                const chatSection = document.querySelector('.chat-section');
+                if (chatSection) {
+                    if (this.showSidebar) {
+                        chatSection.style.width = 'calc(100% - 300px)';
+                    } else {
+                        chatSection.style.width = '100%';
+                    }
+                }
+
+                // 如果有消息，确保滚动到正确位置
+                this.scrollToBottom();
             });
         },
     },

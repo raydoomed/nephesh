@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenManus - AI智能助手</title>
+    <title>Nephesh</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
     <!-- 导入Axios用于HTTP请求 -->
@@ -58,10 +58,15 @@
         <!-- 新导航栏设计 -->
         <nav class="main-nav">
             <div class="nav-container">
+                <!-- 添加侧边栏打开按钮 -->
+                <button v-show="!showSidebar" @click="toggleSidebar" class="nav-button" title="打开侧边栏">
+                    <i class="fas fa-bars"></i>
+                </button>
+
                 <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
-                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo_Gradient.png') }}' : '{{ url_for('static', filename='images/logo_black.png') }}'"
-                        alt="OpenManus Logo" class="logo">
-                    <h1>OpenManus <span class="version-badge">Beta</span></h1>
+                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo.png') }}' : '{{ url_for('static', filename='images/logo.png') }}'"
+                        alt="Nephesh Logo" class="logo">
+                    <h1>Nephesh <span class="version-badge">Beta</span></h1>
                 </a>
 
                 <div class="nav-controls">
@@ -103,7 +108,7 @@
                         <i class="fas fa-wrench"></i>
                     </button>
 
-                    <a href="https://github.com/mannaandpoem/OpenManus" target="_blank" title="访问GitHub项目仓库"
+                    <a href="https://github.com/raydoomed/OpenManus" target="_blank" title="访问GitHub项目仓库"
                         class="github-nav-link">
                         <i class="fab fa-github"></i>
                     </a>
@@ -114,7 +119,12 @@
         <!-- 主工作区 -->
         <div class="workspace">
             <!-- 侧边栏工具箱 -->
-            <div class="toolbox">
+            <div class="toolbox" :class="{'hidden': !showSidebar}">
+                <!-- 侧边栏关闭按钮 -->
+                <button @click="toggleSidebar" class="toggle-sidebar-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+
                 <!-- 欢迎面板 -->
                 <div class="tool-section system-info">
                     <div class="tool-header">
@@ -123,7 +133,7 @@
                     </div>
                     <div class="info-content">
                         <p class="system-info-text">
-                            <span class="system-highlight">OpenManus</span> <span class="system-emoji">✨</span> 是一个基于
+                            <span class="system-highlight">Nephesh</span> <span class="system-emoji">✨</span> 是一个基于
                             大语言模型 <span class="system-emoji">🤖</span> 的智能代理平台，集成了多种工具
                             能力 <span class="system-emoji">🛠️</span>，支持复杂任务
                             执行 <span class="system-emoji">🚀</span> 和自动化流程 <span class="system-emoji">⚙️</span>。
@@ -207,7 +217,7 @@
                 <!-- 版权部分 -->
                 <div class="tool-section copyright-section">
                     <div class="copyright-content">
-                        <p>© OpenManus</p>
+                        <p>© Nephesh</p>
                     </div>
                 </div>
             </div>
@@ -227,11 +237,12 @@
 
                 <!-- 消息显示区域 - 转换为两列布局 -->
                 <div class="messages-container-split">
-                    <!-- 左侧 - Manus 代理 -->
+                    <!-- 左侧 - Nephesh 代理 -->
                     <div class="messages-column agent-messages" ref="agentMessagesContainer">
                         <div class="column-header">
-                            <i class="fas fa-robot"></i>
-                            <span>Manus 代理</span>
+                            <img src="/static/images/logo.png" alt="Nephesh Logo"
+                                style="width: 20px; height: 20px; margin-right: 5px;">
+                            <span>Nephesh 代理</span>
                         </div>
 
                         <div class="column-content">
@@ -239,7 +250,7 @@
                                 :class="['message', message.role, message.class]">
                                 <div class="message-header">
                                     <div class="message-role">
-                                        <span>Manus</span>
+                                        <span>Nephesh</span>
                                     </div>
                                     <span class="message-time">${formatTime(message.time)}</span>
                                 </div>
@@ -254,10 +265,10 @@
                                         <div class="manus-eye"></div>
                                     </div>
                                     <span class="thinking-text" v-if="agentStatus.currentStep > 0">
-                                        Manus 正在处理中... (步骤 ${agentStatus.currentStep}/${agentStatus.maxSteps})
+                                        Nephesh 正在处理中... (步骤 ${agentStatus.currentStep}/${agentStatus.maxSteps})
                                     </span>
                                     <span class="thinking-text" v-else>
-                                        Manus 正在思考...
+                                        Nephesh 正在思考...
                                     </span>
                                 </div>
                             </div>
@@ -288,16 +299,17 @@
                     <div class="messages-column tool-messages" ref="toolMessagesContainer"
                         v-show="toolMessages.length > 0">
                         <div class="column-header">
-                            <i class="fas fa-tools"></i>
-                            <span>OpenManus</span>
+                            <img src="/static/images/logo.png" alt="Nephesh Logo"
+                                style="width: 20px; height: 20px; margin-right: 5px;">
+                            <span>Nephesh</span>
                         </div>
 
                         <!-- 当前使用工具显示 -->
                         <div class="current-tool-display" v-if="currentToolInUse">
                             <i v-if="currentToolInUse === 'terminate'" class="fas fa-check-circle completed-icon"></i>
                             <i v-else class="fas fa-cog"></i>
-                            <span v-if="currentToolInUse === 'terminate'">Manus 已完成</span>
-                            <span v-else>Manus 正在使用: ${currentToolInUse}</span>
+                            <span v-if="currentToolInUse === 'terminate'">Nephesh 已完成</span>
+                            <span v-else>Nephesh 正在使用: ${currentToolInUse}</span>
                         </div>
 
                         <div class="column-content">
@@ -305,7 +317,8 @@
                                 :class="['message', message.role, message.class]">
                                 <div class="message-header">
                                     <div class="message-role">
-                                        <i class="fas fa-tools"></i>
+                                        <img src="/static/images/logo.png" alt="Nephesh Logo"
+                                            style="width: 16px; height: 16px; margin-right: 5px;">
                                         <span>${message.name || '工具输出'}</span>
                                     </div>
                                     <span class="message-time">${formatTime(message.time)}</span>

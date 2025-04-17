@@ -239,7 +239,7 @@ const app = createApp({
                     <html>
                     <head>
                         <meta charset="UTF-8">
-                        <title>OpenManus 会话记录 - ${sessionId.substring(0, 8)}</title>
+                        <title>Nephesh 会话记录 - ${sessionId.substring(0, 8)}</title>
                         <style>
                             body { font-family: Arial, sans-serif; margin: 20px; }
                             h1 { color: #4361ee; }
@@ -262,7 +262,7 @@ const app = createApp({
                         </style>
                     </head>
                     <body>
-                        <h1>OpenManus 会话记录</h1>
+                        <h1>Nephesh 会话记录</h1>
                         <p><strong>会话ID:</strong> ${sessionData.session_id}</p>
                         <p><strong>创建时间:</strong> ${sessionData.created_at}</p>
                         <hr>
@@ -389,7 +389,7 @@ const app = createApp({
                 const now = new Date();
                 const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
                 a.href = url;
-                a.download = `openmanus-session-${sessionIdShort}-${timestamp}.${fileExt}`;
+                a.download = `nephesh-session-${sessionIdShort}-${timestamp}.${fileExt}`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
