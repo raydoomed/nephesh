@@ -734,7 +734,7 @@ const app = Vue.createApp({
                 // Use logo.png in dark mode
                 const logoElement = document.querySelector('.logo');
                 if (logoElement) {
-                    logoElement.src = '/static/images/logo.png';
+                    logoElement.src = '/static/images/nephesh.png';
                 }
 
                 // 检查用户偏好再应用渐变效果设置
@@ -757,7 +757,7 @@ const app = Vue.createApp({
                 // Use logo_black.png in light mode
                 const logoElement = document.querySelector('.logo');
                 if (logoElement) {
-                    logoElement.src = '/static/images/logo.png';
+                    logoElement.src = '/static/images/nephesh.png';
                 }
             }
 
@@ -868,7 +868,7 @@ const app = Vue.createApp({
                     role: 'assistant',
                     content: `<div class="welcome-header">
 <div class="nephesh-header-bg"></div>
-<img src="/static/images/logo.png" alt="Nephesh Logo" class="welcome-logo">
+<img src="/static/images/nephesh.png" alt="Nephesh Logo" class="welcome-logo">
 <h1 class="welcome-title">你好！我是 Nephesh</h1>
 
 <p style="position: relative; z-index: 2;">我可以帮助你完成各种任务。以下是我的一些核心能力：</p>

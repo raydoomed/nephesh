@@ -64,7 +64,7 @@
                 </button>
 
                 <a href="{{ url_for('index') }}" class="brand" style="text-decoration: none;">
-                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/logo.png') }}' : '{{ url_for('static', filename='images/logo.png') }}'"
+                    <img :src="isDarkTheme ? '{{ url_for('static', filename='images/nephesh.png') }}' : '{{ url_for('static', filename='images/nephesh.png') }}'"
                         alt="Nephesh Logo" class="logo">
                     <h1>Nephesh <span class="version-badge">Beta</span></h1>
                 </a>
@@ -240,7 +240,7 @@
                     <!-- 左侧 - Nephesh 代理 -->
                     <div class="messages-column agent-messages" ref="agentMessagesContainer">
                         <div class="column-header">
-                            <img src="/static/images/logo.png" alt="Nephesh Logo"
+                            <img src="/static/images/nephesh.png" alt="Nephesh Logo"
                                 style="width: 20px; height: 20px; margin-right: 5px;">
                             <span>Nephesh 代理</span>
                         </div>
@@ -299,7 +299,7 @@
                     <div class="messages-column tool-messages" ref="toolMessagesContainer"
                         v-show="toolMessages.length > 0">
                         <div class="column-header">
-                            <img src="/static/images/logo.png" alt="Nephesh Logo"
+                            <img src="/static/images/nephesh.png" alt="Nephesh Logo"
                                 style="width: 20px; height: 20px; margin-right: 5px;">
                             <span>Nephesh</span>
                         </div>
@@ -317,7 +317,7 @@
                                 :class="['message', message.role, message.class]">
                                 <div class="message-header">
                                     <div class="message-role">
-                                        <img src="/static/images/logo.png" alt="Nephesh Logo"
+                                        <img src="/static/images/nephesh.png" alt="Nephesh Logo"
                                             style="width: 16px; height: 16px; margin-right: 5px;">
                                         <span>${message.name || '工具输出'}</span>
                                     </div>
