@@ -1,190 +1,134 @@
-![image](https://github.com/user-attachments/assets/23996e57-14a4-4729-ad1c-230335b8b0d8)![image](https://github.com/user-attachments/assets/73375b4e-86a5-49b5-a8b8-1afee63b7ada)
+![image](https://github.com/user-attachments/assets/73375b4e-86a5-49b5-a8b8-1afee63b7ada)
 
 ![image](https://github.com/user-attachments/assets/b6797232-4f71-4180-9b1d-d58eb7c16d08)
 
 ![image](https://github.com/user-attachments/assets/f859d0dc-e39e-478d-abad-4c6ab361f893)
 
+# 👋 Nephesh
 
+Nephesh 是一个基于大语言模型的智能代理平台，集成了多种工具能力，支持复杂任务执行和自动化流程。
 
-
-English | [中文](README_zh.md) | [한국어](README_ko.md) | [日本語](README_ja.md)
-
-[![GitHub stars](https://img.shields.io/github/stars/mannaandpoem/OpenManus?style=social)](https://github.com/mannaandpoem/OpenManus/stargazers)
-&ensp;
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) &ensp;
-[![Discord Follow](https://dcbadge.vercel.app/api/server/DYn29wFk9z?style=flat)](https://discord.gg/DYn29wFk9z)
-[![Demo](https://img.shields.io/badge/Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/lyh-917/OpenManusDemo)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15186407.svg)](https://doi.org/10.5281/zenodo.15186407)
-
-# 👋 OpenManus
-
-Manus is incredible, but OpenManus can achieve any idea without an *Invite Code* 🛫!
-
-Our team members [@Xinbin Liang](https://github.com/mannaandpoem) and [@Jinyu Xiang](https://github.com/XiangJinyu) (core authors), along with [@Zhaoyang Yu](https://github.com/MoshiQAQ), [@Jiayi Zhang](https://github.com/didiforgithub), and [@Sirui Hong](https://github.com/stellaHSR), we are from [@MetaGPT](https://github.com/geekan/MetaGPT). The prototype is launched within 3 hours and we are keeping building!
-
-It's a simple implementation, so we welcome any suggestions, contributions, and feedback!
-
-Enjoy your own agent with OpenManus!
-
-We're also excited to introduce [OpenManus-RL](https://github.com/OpenManus/OpenManus-RL), an open-source project dedicated to reinforcement learning (RL)- based (such as GRPO) tuning methods for LLM agents, developed collaboratively by researchers from UIUC and OpenManus.
-
-## Project Demo
+## 项目演示
 
 <video src="https://private-user-images.githubusercontent.com/57515812/434656488-e1a5ad0b-6ed2-498b-9dba-982963e4cea8.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDQ4NzA0MjIsIm5iZiI6MTc0NDg3MDEyMiwicGF0aCI6Ii81NzUxNTgxMi80MzQ2NTY0ODgtZTFhNWFkMGItNmVkMi00OThiLTlkYmEtOTgyOTYzZTRjZWE4Lm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTA0MTclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwNDE3VDA2MDg0MlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWJkZjg1MTUwMzg3Y2M0NGE3NzVkNGIyNWE0ZjY3YWE5NzA3NWE3OGVjMWU2YmMxNjU3YzczOWZlYTgzYTIzYzcmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.5tEs-p7NUQrqj4a5AkHO1Q8tR2OndeYK9Us9EA5uGdg" data-canonical-src="https://private-user-images.githubusercontent.com/57515812/434656488-e1a5ad0b-6ed2-498b-9dba-982963e4cea8.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDQ4NzA0MjIsIm5iZiI6MTc0NDg3MDEyMiwicGF0aCI6Ii81NzUxNTgxMi80MzQ2NTY0ODgtZTFhNWFkMGItNmVkMi00OThiLTlkYmEtOTgyOTYzZTRjZWE4Lm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTA0MTclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwNDE3VDA2MDg0MlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWJkZjg1MTUwMzg3Y2M0NGE3NzVkNGIyNWE0ZjY3YWE5NzA3NWE3OGVjMWU2YmMxNjU3YzczOWZlYTgzYTIzYzcmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.5tEs-p7NUQrqj4a5AkHO1Q8tR2OndeYK9Us9EA5uGdg" controls="controls" muted="muted" class="d-block rounded-bottom-2 border-top width-fit" style="max-height:640px; min-height: 200px"></video>
 
-## Installation
+## 安装
 
-We provide two installation methods. Method 2 (using uv) is recommended for faster installation and better dependency management.
+我们提供两种安装方法。方法2（使用uv）推荐用于更快的安装和更好的依赖管理。
 
-### Method 1: Using conda
+### 方法1：使用conda
 
-1. Create a new conda environment:
+1. 创建一个新的conda环境：
 
 ```bash
 conda create -n open_manus python=3.12
 conda activate open_manus
 ```
 
-2. Clone the repository:
+2. 克隆仓库：
 
 ```bash
-git clone https://github.com/mannaandpoem/OpenManus.git
+git clone https://github.com/raydoomed/OpenManus.git
 cd OpenManus
 ```
 
-3. Install dependencies:
+3. 安装依赖：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Method 2: Using uv (Recommended)
+### 方法2：使用uv（推荐）
 
-1. Install uv (A fast Python package installer and resolver):
+1. 安装uv（一个快速的Python包安装和解析器）：
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-2. Clone the repository:
+2. 克隆仓库：
 
 ```bash
-git clone https://github.com/mannaandpoem/OpenManus.git
+git clone https://github.com/raydoomed/OpenManus.git
 cd OpenManus
 ```
 
-3. Create a new virtual environment and activate it:
+3. 创建一个新的虚拟环境并激活它：
 
 ```bash
 uv venv --python 3.12
-source .venv/bin/activate  # On Unix/macOS
-# Or on Windows:
+source .venv/bin/activate  # 在Unix/macOS上
+# 或在Windows上：
 # .venv\Scripts\activate
 ```
 
-4. Install dependencies:
+4. 安装依赖：
 
 ```bash
 uv pip install -r requirements.txt
 ```
 
-### Browser Automation Tool (Optional)
+### 浏览器自动化工具（可选）
 ```bash
 playwright install
 ```
 
-## Configuration
+## 配置
 
-OpenManus requires configuration for the LLM APIs it uses. Follow these steps to set up your configuration:
+Nephesh需要配置它使用的LLM API。按照以下步骤设置您的配置：
 
-1. Create a `config.toml` file in the `config` directory (you can copy from the example):
+1. 在`config`目录中创建一个`config.toml`文件（您可以从示例复制）：
 
 ```bash
 cp config/config.example.toml config/config.toml
 ```
 
-2. Edit `config/config.toml` to add your API keys and customize settings:
+2. 编辑`config/config.toml`以添加您的API密钥并自定义设置：
 
 ```toml
-# Global LLM configuration
+# 全局LLM配置
 [llm]
 model = "gpt-4o"
 base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
+api_key = "sk-..."  # 替换为您的实际API密钥
 max_tokens = 4096
 temperature = 0.0
 
-# Optional configuration for specific LLM models
+# 特定LLM模型的可选配置
 [llm.vision]
 model = "gpt-4o"
 base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
+api_key = "sk-..."  # 替换为您的实际API密钥
 ```
 
-## Quick Start
+## 快速开始
 
-One line for run OpenManus:
+一行代码运行Nephesh：
 
 ```bash
 python main.py
 ```
 
-Then input your idea via terminal!
+然后通过终端输入您的需求！
 
-For MCP tool version, you can run:
+对于MCP工具版本，您可以运行：
 ```bash
 python run_mcp.py
 ```
 
-For unstable multi-agent version, you also can run:
+对于Web界面版本，您可以运行：
+```bash
+python run_web.py
+```
+
+对于不稳定的多代理版本，您也可以运行：
 
 ```bash
 python run_flow.py
 ```
 
-## How to contribute
+## 如何贡献
 
-We welcome any friendly suggestions and helpful contributions! Just create issues or submit pull requests.
+## 社区
 
-Or contact @mannaandpoem via 📧email: mannaandpoem@gmail.com
-
-**Note**: Before submitting a pull request, please use the pre-commit tool to check your changes. Run `pre-commit run --all-files` to execute the checks.
-
-## Community Group
-Join our networking group on Feishu and share your experience with other developers!
-
-<div align="center" style="display: flex; gap: 20px;">
-    <img src="assets/community_group.jpg" alt="OpenManus 交流群" width="300" />
-</div>
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=mannaandpoem/OpenManus&type=Date)](https://star-history.com/#mannaandpoem/OpenManus&Date)
-
-## Sponsors
-Thanks to [PPIO](https://ppinfra.com/user/register?invited_by=OCPKCN&utm_source=github_openmanus&utm_medium=github_readme&utm_campaign=link) for computing source support.
-> PPIO: The most affordable and easily-integrated MaaS and GPU cloud solution.
-
-
-## Acknowledgement
-
-Thanks to [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)
-and [browser-use](https://github.com/browser-use/browser-use) for providing basic support for this project!
-
-Additionally, we are grateful to [AAAJ](https://github.com/metauto-ai/agent-as-a-judge), [MetaGPT](https://github.com/geekan/MetaGPT), [OpenHands](https://github.com/All-Hands-AI/OpenHands) and [SWE-agent](https://github.com/SWE-agent/SWE-agent).
-
-We also thank stepfun(阶跃星辰) for supporting our Hugging Face demo space.
-
-OpenManus is built by contributors from MetaGPT. Huge thanks to this agent community!
-
-## Cite
-```bibtex
-@misc{openmanus2025,
-  author = {Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
-  title = {OpenManus: An open-source framework for building general AI agents},
-  year = {2025},
-  publisher = {Zenodo},
-  doi = {10.5281/zenodo.15186407},
-  url = {https://doi.org/10.5281/zenodo.15186407},
-}
-```
+## 赞助商
