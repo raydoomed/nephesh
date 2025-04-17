@@ -12,7 +12,7 @@ server = ""
 username = ""
 
 [llm]
-api_key = "sk-275ba5a42a5441e5afbb6bb7618dc523"
+api_key = "sk-xxx"
 base_url = "https://api.deepseek.com/v1"
 max_tokens = 4096
 model = "deepseek-chat"
