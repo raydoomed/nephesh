@@ -32,7 +32,7 @@ conda activate nephesh
 2. 克隆仓库：
 
 ```bash
-git clone https://github.com/raydoomed/OpenManus.git
+git clone https://github.com/raydoomed/nephesh.git
 cd nephesh
 ```
 
