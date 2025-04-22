@@ -1,11 +1,15 @@
-from typing import Optional
+from typing import Dict, List, Optional, Union
 
 from pydantic import Field, model_validator
 
 from app.agent.browser import BrowserContextHelper
 from app.agent.toolcall import ToolCallAgent
 from app.config import config
+from app.flow.flow_factory import FlowFactory, FlowType
+from app.flow.planning import PlanningFlow
+from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
+from app.schema import AgentState
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.python_execute import PythonExecute
@@ -13,11 +17,11 @@ from app.tool.str_replace_editor import StrReplaceEditor
 
 
 class Manus(ToolCallAgent):
-    """A versatile general-purpose agent."""
+    """A versatile general-purpose agent with planning capabilities."""
 
     name: str = "Manus"
     description: str = (
-        "A versatile agent that can solve various tasks using multiple tools"
+        "A versatile agent that can plan and solve various tasks using multiple tools"
     )
 
     system_prompt: str = SYSTEM_PROMPT.format(directory=config.workspace_root)
@@ -36,34 +40,135 @@ class Manus(ToolCallAgent):
     special_tool_names: list[str] = Field(default_factory=lambda: [Terminate().name])
 
     browser_context_helper: Optional[BrowserContextHelper] = None
+    planning_flow: Optional[PlanningFlow] = None
+    is_executing_planned_task: bool = False
 
     @model_validator(mode="after")
     def initialize_helper(self) -> "Manus":
         self.browser_context_helper = BrowserContextHelper(self)
         return self
 
-    async def think(self) -> bool:
-        """Process current state and decide next actions with appropriate context."""
-        original_prompt = self.next_step_prompt
-        recent_messages = self.memory.messages[-3:] if self.memory.messages else []
-        browser_in_use = any(
-            tc.function.name == BrowserUseTool().name
-            for msg in recent_messages
-            if msg.tool_calls
-            for tc in msg.tool_calls
+    def create_planning_flow(self) -> PlanningFlow:
+        """创建规划流程，将自身作为执行代理"""
+        return FlowFactory.create_flow(
+            flow_type=FlowType.PLANNING, agents={"manus": self}
         )
 
-        if browser_in_use:
-            self.next_step_prompt = (
-                await self.browser_context_helper.format_next_step_prompt()
+    async def run(self, input_text: str) -> str:
+        """运行代理，首先规划任务，然后执行
+
+        Args:
+            input_text: 用户输入的文本
+
+        Returns:
+            执行结果
+        """
+        # 如果代理正在执行规划任务中的一个步骤，则使用正常流程
+        if self.is_executing_planned_task:
+            return await super().run(input_text)
+
+        # 否则，创建规划流程并执行
+        logger.info(f"Manus: 为任务创建执行计划 - {input_text[:50]}...")
+        self.planning_flow = self.create_planning_flow()
+
+        # 执行规划流程
+        try:
+            result = await self.planning_flow.execute(input_text)
+            logger.info("Manus: 任务规划执行完成")
+            return result
+        finally:
+            # 确保执行后重置状态
+            self.is_executing_planned_task = False
+            logger.info("Manus: 重置执行状态")
+
+    async def execute_planned_step(
+        self, step_prompt: str, current_step_index: int = None, planning_flow=None
+    ) -> str:
+        """执行规划好的步骤
+
+        Args:
+            step_prompt: 步骤提示
+            current_step_index: 当前步骤索引
+            planning_flow: 规划流程实例
+
+        Returns:
+            步骤执行结果
+        """
+        # 设置执行状态和上下文
+        self.is_executing_planned_task = True
+
+        # 保存当前规划流程和步骤索引，以便think方法使用
+        if planning_flow:
+            self.planning_flow = planning_flow
+
+        # 记录正在执行的步骤
+        logger.info(f"Manus: 执行计划步骤 {current_step_index} - {step_prompt[:50]}...")
+
+        try:
+            # 使用原始run方法执行步骤
+            return await super().run(step_prompt)
+        finally:
+            self.is_executing_planned_task = False
+            logger.info(f"Manus: 完成计划步骤 {current_step_index}")
+
+    async def think(self) -> bool:
+        """处理当前状态并决定下一步行动，考虑规划上下文或浏览器上下文。"""
+        # 保存原始提示，以便恢复
+        original_prompt = self.next_step_prompt
+        original_system_prompt = self.system_prompt
+        modified = False
+
+        try:
+            # 1. 如果在执行规划任务，添加规划上下文到系统提示
+            if self.is_executing_planned_task and self.planning_flow:
+                try:
+                    # 获取当前计划状态文本
+                    plan_status = await self.planning_flow._get_plan_text()
+                    current_step = self.planning_flow.current_step_index
+
+                    # 创建规划上下文提示
+                    planning_context = f"""
+                    您正在执行一个任务计划中的第 {current_step} 步。
+
+                    当前计划状态:
+                    {plan_status}
+
+                    请考虑当前任务计划的上下文，选择最适合完成当前步骤的行动。
+                    """
+
+                    # 将规划上下文添加到系统提示
+                    self.system_prompt = (
+                        f"{original_system_prompt}\n\n{planning_context}"
+                    )
+                    modified = True
+                    logger.info(f"Manus: 添加规划上下文到系统提示")
+                except Exception as e:
+                    logger.warning(f"Manus: 添加规划上下文失败: {e}")
+
+            # 2. 如果使用浏览器，设置浏览器上下文
+            recent_messages = self.memory.messages[-3:] if self.memory.messages else []
+            browser_in_use = any(
+                tc.function.name == BrowserUseTool().name
+                for msg in recent_messages
+                if msg.tool_calls
+                for tc in msg.tool_calls
             )
 
-        result = await super().think()
+            if browser_in_use:
+                self.next_step_prompt = (
+                    await self.browser_context_helper.format_next_step_prompt()
+                )
+                modified = True
 
-        # Restore original prompt
-        self.next_step_prompt = original_prompt
+            # 调用父类的think方法
+            result = await super().think()
 
-        return result
+            return result
+        finally:
+            # 恢复原始提示
+            if modified:
+                self.next_step_prompt = original_prompt
+                self.system_prompt = original_system_prompt
 
     async def cleanup(self):
         """Clean up Manus agent resources."""

@@ -1,7 +1,8 @@
 import asyncio
 import base64
 import json
-from typing import Generic, Optional, TypeVar
+import logging
+from typing import Dict, Generic, Optional, TypeVar
 
 from browser_use import Browser as BrowserUseBrowser
 from browser_use import BrowserConfig
@@ -15,6 +16,7 @@ from app.llm import LLM
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
+logger = logging.getLogger(__name__)
 
 _BROWSER_DESCRIPTION = """\
 A powerful browser automation tool that allows interaction with web pages through various actions.
@@ -32,6 +34,11 @@ Key capabilities include:
 
 Note: When using element indices, refer to the numbered elements shown in the current browser state.
 """
+
+# 定义页面加载超时时间常量（毫秒）
+DEFAULT_TIMEOUT_MS = 15000
+# 定义截图质量
+SCREENSHOT_QUALITY = 70
 
 Context = TypeVar("Context")
 
@@ -121,7 +128,18 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         },
     }
 
-    lock: asyncio.Lock = Field(default_factory=asyncio.Lock)
+    # 为不同类型的操作创建不同的锁
+    locks: Dict[str, asyncio.Lock] = Field(
+        default_factory=lambda: {
+            "browser_init": asyncio.Lock(),  # 浏览器初始化锁
+            "navigation": asyncio.Lock(),  # 导航操作锁
+            "interaction": asyncio.Lock(),  # 元素交互锁
+            "extraction": asyncio.Lock(),  # 内容提取锁
+            "tab": asyncio.Lock(),  # 标签页管理锁
+            "state": asyncio.Lock(),  # 状态获取锁
+            "cleanup": asyncio.Lock(),  # 清理资源锁
+        }
+    )
     browser: Optional[BrowserUseBrowser] = Field(default=None, exclude=True)
     context: Optional[BrowserContext] = Field(default=None, exclude=True)
     dom_service: Optional[DomService] = Field(default=None, exclude=True)
@@ -140,52 +158,98 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
     async def _ensure_browser_initialized(self) -> BrowserContext:
         """Ensure browser and context are initialized."""
-        if self.browser is None:
-            browser_config_kwargs = {"headless": False, "disable_security": True}
+        async with self.locks["browser_init"]:
+            if self.browser is None:
+                # 默认启用无头模式以提高性能
+                browser_config_kwargs = {"headless": True, "disable_security": True}
 
-            if config.browser_config:
-                from browser_use.browser.browser import ProxySettings
+                if config.browser_config:
+                    from browser_use.browser.browser import ProxySettings
 
-                # handle proxy settings.
-                if config.browser_config.proxy and config.browser_config.proxy.server:
-                    browser_config_kwargs["proxy"] = ProxySettings(
-                        server=config.browser_config.proxy.server,
-                        username=config.browser_config.proxy.username,
-                        password=config.browser_config.proxy.password,
-                    )
+                    # handle proxy settings.
+                    if (
+                        config.browser_config.proxy
+                        and config.browser_config.proxy.server
+                    ):
+                        browser_config_kwargs["proxy"] = ProxySettings(
+                            server=config.browser_config.proxy.server,
+                            username=config.browser_config.proxy.username,
+                            password=config.browser_config.proxy.password,
+                        )
 
-                browser_attrs = [
-                    "headless",
-                    "disable_security",
-                    "extra_chromium_args",
-                    "chrome_instance_path",
-                    "wss_url",
-                    "cdp_url",
-                ]
+                    browser_attrs = [
+                        "headless",
+                        "disable_security",
+                        "extra_chromium_args",
+                        "chrome_instance_path",
+                        "wss_url",
+                        "cdp_url",
+                    ]
 
-                for attr in browser_attrs:
-                    value = getattr(config.browser_config, attr, None)
-                    if value is not None:
-                        if not isinstance(value, list) or value:
-                            browser_config_kwargs[attr] = value
+                    for attr in browser_attrs:
+                        value = getattr(config.browser_config, attr, None)
+                        if value is not None:
+                            if not isinstance(value, list) or value:
+                                browser_config_kwargs[attr] = value
 
-            self.browser = BrowserUseBrowser(BrowserConfig(**browser_config_kwargs))
+                # 添加禁用图片和视频加载的参数，提高性能
+                extra_args = browser_config_kwargs.get("extra_chromium_args", [])
+                extra_args.extend(
+                    [
+                        "--disable-images",
+                        "--blink-settings=imagesEnabled=false",
+                        "--disable-video",
+                    ]
+                )
+                browser_config_kwargs["extra_chromium_args"] = extra_args
 
-        if self.context is None:
-            context_config = BrowserContextConfig()
+                self.browser = BrowserUseBrowser(BrowserConfig(**browser_config_kwargs))
 
-            # if there is context config in the config, use it.
-            if (
-                config.browser_config
-                and hasattr(config.browser_config, "new_context_config")
-                and config.browser_config.new_context_config
-            ):
-                context_config = config.browser_config.new_context_config
+            if self.context is None:
+                context_config = BrowserContextConfig()
 
-            self.context = await self.browser.new_context(context_config)
-            self.dom_service = DomService(await self.context.get_current_page())
+                # if there is context config in the config, use it.
+                if (
+                    config.browser_config
+                    and hasattr(config.browser_config, "new_context_config")
+                    and config.browser_config.new_context_config
+                ):
+                    context_config = config.browser_config.new_context_config
 
-        return self.context
+                self.context = await self.browser.new_context(context_config)
+                self.dom_service = DomService(await self.context.get_current_page())
+
+            return self.context
+
+    # 获取特定操作类型的锁
+    def _get_lock_for_action(self, action: str) -> asyncio.Lock:
+        """根据操作类型获取相应的锁"""
+        navigation_actions = ["go_to_url", "go_back", "refresh", "web_search"]
+        interaction_actions = [
+            "click_element",
+            "input_text",
+            "scroll_down",
+            "scroll_up",
+            "scroll_to_text",
+            "send_keys",
+            "get_dropdown_options",
+            "select_dropdown_option",
+            "wait",
+        ]
+        tab_actions = ["switch_tab", "open_tab", "close_tab"]
+        extraction_actions = ["extract_content"]
+
+        if action in navigation_actions:
+            return self.locks["navigation"]
+        elif action in interaction_actions:
+            return self.locks["interaction"]
+        elif action in tab_actions:
+            return self.locks["tab"]
+        elif action in extraction_actions:
+            return self.locks["extraction"]
+        else:
+            # 默认使用导航锁
+            return self.locks["navigation"]
 
     async def execute(
         self,
@@ -220,10 +284,14 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         Returns:
             ToolResult with the action's output or error
         """
-        async with self.lock:
-            try:
-                context = await self._ensure_browser_initialized()
+        # 确保浏览器已初始化（使用初始化锁）
+        context = await self._ensure_browser_initialized()
 
+        # 根据操作类型获取相应的锁
+        lock = self._get_lock_for_action(action)
+
+        async with lock:
+            try:
                 # Get max content length from config
                 max_content_length = getattr(
                     config.browser_config, "max_content_length", 2000
@@ -236,16 +304,22 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                             error="URL is required for 'go_to_url' action"
                         )
                     page = await context.get_current_page()
-                    await page.goto(url)
-                    await page.wait_for_load_state()
+                    await page.goto(url, timeout=DEFAULT_TIMEOUT_MS)
+                    await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
                     return ToolResult(output=f"Navigated to {url}")
 
                 elif action == "go_back":
                     await context.go_back()
+                    # 添加页面加载状态等待超时
+                    page = await context.get_current_page()
+                    await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
                     return ToolResult(output="Navigated back")
 
                 elif action == "refresh":
                     await context.refresh_page()
+                    # 添加页面加载状态等待超时
+                    page = await context.get_current_page()
+                    await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
                     return ToolResult(output="Refreshed current page")
 
                 elif action == "web_search":
@@ -253,19 +327,58 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         return ToolResult(
                             error="Query is required for 'web_search' action"
                         )
-                    # Execute the web search and return results directly without browser navigation
-                    search_response = await self.web_search_tool.execute(
-                        query=query, fetch_content=True, num_results=1
-                    )
-                    # Navigate to the first search result
-                    first_search_result = search_response.results[0]
-                    url_to_navigate = first_search_result.url
+                    try:
+                        # 执行搜索
+                        logger.info(f"执行网络搜索: {query}")
+                        search_response = await self.web_search_tool.execute(
+                            query=query, fetch_content=True, num_results=1
+                        )
 
-                    page = await context.get_current_page()
-                    await page.goto(url_to_navigate)
-                    await page.wait_for_load_state()
+                        # 验证搜索结果
+                        if not search_response.results:
+                            return ToolResult(error=f"搜索未返回任何结果: {query}")
 
-                    return search_response
+                        # 获取第一个搜索结果并确保URL格式正确
+                        first_search_result = search_response.results[0]
+                        url_to_navigate = first_search_result.url
+
+                        # 确保URL包含协议
+                        from urllib.parse import urlparse
+
+                        parsed_url = urlparse(url_to_navigate)
+                        if not parsed_url.scheme:
+                            if url_to_navigate.startswith("//"):
+                                url_to_navigate = f"https:{url_to_navigate}"
+                            else:
+                                url_to_navigate = f"https://{url_to_navigate}"
+                            logger.info(f"修正URL格式: {url_to_navigate}")
+
+                        # 验证URL是否有效
+                        if not parsed_url.netloc:
+                            return ToolResult(
+                                error=f"搜索结果URL无效: {url_to_navigate}"
+                            )
+
+                        # 导航到URL，设置超时
+                        page = await context.get_current_page()
+
+                        # 使用默认超时时间
+                        try:
+                            logger.info(f"导航到搜索结果: {url_to_navigate}")
+                            await page.goto(url_to_navigate, timeout=DEFAULT_TIMEOUT_MS)
+                            await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
+                            return ToolResult(
+                                output=f"成功导航到搜索结果: {url_to_navigate}\n\n{search_response.output}"
+                            )
+                        except Exception as nav_error:
+                            logger.warning(f"导航到URL时出错: {nav_error}")
+                            return ToolResult(
+                                output=f"无法导航到URL，但搜索结果如下:\n\n{search_response.output}"
+                            )
+                    except Exception as e:
+                        error_msg = f"Web search failed: {str(e)}"
+                        logger.error(error_msg)
+                        return ToolResult(error=error_msg)
 
                 # Element interaction actions
                 elif action == "click_element":
@@ -317,7 +430,9 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     page = await context.get_current_page()
                     try:
                         locator = page.get_by_text(text, exact=False)
-                        await locator.scroll_into_view_if_needed()
+                        await locator.scroll_into_view_if_needed(
+                            timeout=DEFAULT_TIMEOUT_MS
+                        )
                         return ToolResult(output=f"Scrolled to text: '{text}'")
                     except Exception as e:
                         return ToolResult(error=f"Failed to scroll to text: {str(e)}")
@@ -379,16 +494,96 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         )
 
                     page = await context.get_current_page()
-                    import markdownify
 
-                    content = markdownify.markdownify(await page.content())
+                    # 优化: 使用更高效的内容提取方法，先尝试提取关键内容
+                    # 1. 先尝试只提取可见文本内容，而不是整个HTML文档
+                    try:
+                        # 使用JS提取页面可见文本内容
+                        visible_text = await page.evaluate(
+                            """
+                            () => {
+                                // 函数来判断元素是否可见
+                                function isVisible(elem) {
+                                    if (!elem) return false;
+                                    const style = window.getComputedStyle(elem);
+                                    return style.display !== 'none' &&
+                                           style.visibility !== 'hidden' &&
+                                           style.opacity !== '0';
+                                }
+
+                                // 收集页面所有可见文本
+                                const textElements = [];
+                                const walker = document.createTreeWalker(
+                                    document.body,
+                                    NodeFilter.SHOW_TEXT,
+                                    { acceptNode: node => isVisible(node.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
+                                );
+
+                                while(walker.nextNode()) {
+                                    const text = walker.currentNode.textContent.trim();
+                                    if (text) textElements.push(text);
+                                }
+
+                                return textElements.join('\\n');
+                            }
+                        """
+                        )
+
+                        # 2. 根据目标智能提取相关内容
+                        # 使用关键词匹配来获取与goal相关的段落
+                        import re
+                        from collections import Counter
+
+                        # 分析goal中的关键词
+                        goal_keywords = re.findall(r"\w+", goal.lower())
+                        goal_keywords = [
+                            kw for kw in goal_keywords if len(kw) > 3
+                        ]  # 过滤短词
+
+                        # 将文本分成段落并计算每段与目标的相关性
+                        paragraphs = visible_text.split("\n\n")
+                        relevant_paragraphs = []
+
+                        for para in paragraphs:
+                            if not para.strip():
+                                continue
+
+                            # 计算段落与目标的相关性得分
+                            para_words = re.findall(r"\w+", para.lower())
+                            matches = sum(1 for kw in goal_keywords if kw in para_words)
+
+                            if (
+                                matches > 0 or len(paragraphs) <= 5
+                            ):  # 相关段落或总段落数少
+                                relevant_paragraphs.append(para)
+
+                        # 如果没找到相关段落，则使用前几段加标题
+                        if not relevant_paragraphs and paragraphs:
+                            # 尝试获取页面标题
+                            title = await page.title()
+                            relevant_paragraphs = [title] + paragraphs[:3]
+
+                        # 合并提取的内容，确保不超过最大长度
+                        content = "\n\n".join(relevant_paragraphs)
+
+                    except Exception as extract_error:
+                        logger.warning(
+                            f"优化内容提取失败，回退到标准方法: {extract_error}"
+                        )
+                        # 回退到原始方法
+                        import markdownify
+
+                        content = markdownify.markdownify(await page.content())
+
+                    # 确保内容不超过最大长度限制
+                    content = content[:max_content_length]
 
                     prompt = f"""\
-Your task is to extract the content of the page. You will be given a page and a goal, and you should extract all relevant information around this goal from the page. If the goal is vague, summarize the page. Respond in json format.
+Your task is to extract the content of the page. You will be given a page and a goal, and you should extract all relevant information around this goal from the page. Be concise and focused. Respond in json format.
 Extraction goal: {goal}
 
 Page content:
-{content[:max_content_length]}
+{content}
 """
                     messages = [{"role": "system", "content": prompt}]
 
@@ -451,13 +646,16 @@ Page content:
                         )
                     await context.switch_to_tab(tab_id)
                     page = await context.get_current_page()
-                    await page.wait_for_load_state()
+                    await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
                     return ToolResult(output=f"Switched to tab {tab_id}")
 
                 elif action == "open_tab":
                     if not url:
                         return ToolResult(error="URL is required for 'open_tab' action")
                     await context.create_new_tab(url)
+                    # 添加页面加载等待超时
+                    page = await context.get_current_page()
+                    await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
                     return ToolResult(output=f"Opened new tab with {url}")
 
                 elif action == "close_tab":
@@ -483,81 +681,100 @@ Page content:
         Get the current browser state as a ToolResult.
         If context is not provided, uses self.context.
         """
-        try:
-            # Use provided context or fall back to self.context
-            ctx = context or self.context
-            if not ctx:
-                return ToolResult(error="Browser context not initialized")
+        async with self.locks["state"]:
+            try:
+                # Use provided context or fall back to self.context
+                ctx = context or self.context
+                if not ctx:
+                    return ToolResult(error="Browser context not initialized")
 
-            state = await ctx.get_state()
+                state = await ctx.get_state()
 
-            # Create a viewport_info dictionary if it doesn't exist
-            viewport_height = 0
-            if hasattr(state, "viewport_info") and state.viewport_info:
-                viewport_height = state.viewport_info.height
-            elif hasattr(ctx, "config") and hasattr(ctx.config, "browser_window_size"):
-                viewport_height = ctx.config.browser_window_size.get("height", 0)
+                # Create a viewport_info dictionary if it doesn't exist
+                viewport_height = 0
+                if hasattr(state, "viewport_info") and state.viewport_info:
+                    viewport_height = state.viewport_info.height
+                elif hasattr(ctx, "config") and hasattr(
+                    ctx.config, "browser_window_size"
+                ):
+                    viewport_height = ctx.config.browser_window_size.get("height", 0)
 
-            # Take a screenshot for the state
-            page = await ctx.get_current_page()
+                # Take a screenshot for the state
+                page = await ctx.get_current_page()
 
-            await page.bring_to_front()
-            await page.wait_for_load_state()
+                await page.bring_to_front()
+                await page.wait_for_load_state(timeout=DEFAULT_TIMEOUT_MS)
 
-            screenshot = await page.screenshot(
-                full_page=True, animations="disabled", type="jpeg", quality=100
-            )
+                # 降低截图质量以提高性能
+                screenshot = await page.screenshot(
+                    full_page=True,
+                    animations="disabled",
+                    type="jpeg",
+                    quality=SCREENSHOT_QUALITY,
+                )
 
-            screenshot = base64.b64encode(screenshot).decode("utf-8")
+                screenshot = base64.b64encode(screenshot).decode("utf-8")
 
-            # Build the state info with all required fields
-            state_info = {
-                "url": state.url,
-                "title": state.title,
-                "tabs": [tab.model_dump() for tab in state.tabs],
-                "help": "[0], [1], [2], etc., represent clickable indices corresponding to the elements listed. Clicking on these indices will navigate to or interact with the respective content behind them.",
-                "interactive_elements": (
-                    state.element_tree.clickable_elements_to_string()
-                    if state.element_tree
-                    else ""
-                ),
-                "scroll_info": {
-                    "pixels_above": getattr(state, "pixels_above", 0),
-                    "pixels_below": getattr(state, "pixels_below", 0),
-                    "total_height": getattr(state, "pixels_above", 0)
-                    + getattr(state, "pixels_below", 0)
-                    + viewport_height,
-                },
-                "viewport_height": viewport_height,
-            }
+                # Build the state info with all required fields
+                state_info = {
+                    "url": state.url,
+                    "title": state.title,
+                    "tabs": [tab.model_dump() for tab in state.tabs],
+                    "help": "[0], [1], [2], etc., represent clickable indices corresponding to the elements listed. Clicking on these indices will navigate to or interact with the respective content behind them.",
+                    "interactive_elements": (
+                        state.element_tree.clickable_elements_to_string()
+                        if state.element_tree
+                        else ""
+                    ),
+                    "scroll_info": {
+                        "pixels_above": getattr(state, "pixels_above", 0),
+                        "pixels_below": getattr(state, "pixels_below", 0),
+                        "total_height": getattr(state, "pixels_above", 0)
+                        + getattr(state, "pixels_below", 0)
+                        + viewport_height,
+                    },
+                    "viewport_height": viewport_height,
+                }
 
-            return ToolResult(
-                output=json.dumps(state_info, indent=4, ensure_ascii=False),
-                base64_image=screenshot,
-            )
-        except Exception as e:
-            return ToolResult(error=f"Failed to get browser state: {str(e)}")
+                return ToolResult(
+                    output=json.dumps(state_info, indent=4, ensure_ascii=False),
+                    base64_image=screenshot,
+                )
+            except Exception as e:
+                return ToolResult(error=f"Failed to get browser state: {str(e)}")
 
     async def cleanup(self):
         """Clean up browser resources."""
-        async with self.lock:
-            if self.context is not None:
-                await self.context.close()
-                self.context = None
-                self.dom_service = None
-            if self.browser is not None:
-                await self.browser.close()
-                self.browser = None
+        async with self.locks["cleanup"]:
+            try:
+                if self.context is not None:
+                    logger.info("正在清理浏览器上下文资源...")
+                    await self.context.close()
+                    self.context = None
+                    self.dom_service = None
+                if self.browser is not None:
+                    logger.info("正在关闭浏览器...")
+                    await self.browser.close()
+                    self.browser = None
+                logger.info("浏览器资源清理完成")
+            except Exception as e:
+                logger.error(f"清理浏览器资源时出错: {str(e)}")
 
     def __del__(self):
         """Ensure cleanup when object is destroyed."""
         if self.browser is not None or self.context is not None:
             try:
-                asyncio.run(self.cleanup())
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(self.cleanup())
-                loop.close()
+                # 不要使用asyncio.run，它可能导致运行时错误
+                logger.info("对象被销毁，尝试清理浏览器资源...")
+                loop = (
+                    asyncio.get_event_loop()
+                    if asyncio.get_event_loop().is_running()
+                    else asyncio.new_event_loop()
+                )
+                if not loop.is_closed():
+                    loop.create_task(self.cleanup())
+            except Exception as e:
+                logger.error(f"析构函数中清理资源时出错: {str(e)}")
 
     @classmethod
     def create_with_context(cls, context: Context) -> "BrowserUseTool[Context]":

@@ -1,5 +1,6 @@
 import asyncio
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -38,6 +39,22 @@ class SearchResult(BaseModel):
     def __str__(self) -> str:
         """String representation of a search result."""
         return f"{self.title} ({self.url})"
+
+    @model_validator(mode="after")
+    def validate_url(self) -> "SearchResult":
+        """确保URL格式正确，添加缺失的协议部分"""
+        if self.url:
+            parsed_url = urlparse(self.url)
+            # 如果URL没有协议部分
+            if not parsed_url.scheme:
+                # 如果URL以//开头，添加https:
+                if self.url.startswith("//"):
+                    self.url = f"https:{self.url}"
+                # 否则添加https://
+                else:
+                    self.url = f"https://{self.url}"
+                logger.debug(f"URL format fixed: {self.url}")
+        return self
 
 
 class SearchMetadata(BaseModel):
@@ -118,8 +135,22 @@ class WebContentFetcher:
         Returns:
             Extracted text content or None if fetching fails
         """
+        # 确保URL格式正确
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme:
+            if url.startswith("//"):
+                url = f"https:{url}"
+            elif not url.startswith(("http://", "https://")):
+                url = f"https://{url}"
+            logger.debug(f"URL format fixed for content fetching: {url}")
+
+        # 如果URL仍然无效，返回None
+        if not urlparse(url).netloc:
+            logger.warning(f"Invalid URL for content fetching: {url}")
+            return None
+
         headers = {
-            "WebSearch": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
         try:
@@ -253,6 +284,15 @@ class WebSearch(BaseTool):
             results = await self._try_all_engines(query, num_results, search_params)
 
             if results:
+                # 确保所有结果的URL格式正确
+                for result in results:
+                    parsed_url = urlparse(result.url)
+                    if not parsed_url.scheme:
+                        if result.url.startswith("//"):
+                            result.url = f"https:{result.url}"
+                        else:
+                            result.url = f"https://{result.url}"
+
                 # Fetch content if requested
                 if fetch_content:
                     results = await self._fetch_content_for_results(results)
@@ -302,6 +342,7 @@ class WebSearch(BaseTool):
             )
 
             if not search_items:
+                failed_engines.append(engine_name)
                 continue
 
             if failed_engines:
@@ -395,17 +436,21 @@ class WebSearch(BaseTool):
         search_params: Dict[str, Any],
     ) -> List[SearchItem]:
         """Execute search with the given engine and parameters."""
-        return await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: list(
-                engine.perform_search(
-                    query,
-                    num_results=num_results,
-                    lang=search_params.get("lang"),
-                    country=search_params.get("country"),
-                )
-            ),
-        )
+        try:
+            return await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: list(
+                    engine.perform_search(
+                        query,
+                        num_results=num_results,
+                        lang=search_params.get("lang"),
+                        country=search_params.get("country"),
+                    )
+                ),
+            )
+        except Exception as e:
+            logger.error(f"搜索引擎 {engine.__class__.__name__} 搜索失败: {str(e)}")
+            return []
 
 
 if __name__ == "__main__":
