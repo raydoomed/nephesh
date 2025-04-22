@@ -104,8 +104,26 @@ class Manus(ToolCallAgent):
         logger.info(f"Manus: 执行计划步骤 {current_step_index} - {step_prompt[:50]}...")
 
         try:
-            # 使用原始run方法执行步骤
-            return await super().run(step_prompt)
+            # 使用原始run方法执行步骤，允许使用多个工具调用
+            result = await super().run(step_prompt)
+
+            # 确保在执行完成后记录结果
+            logger.info(
+                f"Manus: 步骤 {current_step_index} 执行完成，结果: {result[:100]}..."
+            )
+
+            # 如果planning_flow存在，主动标记当前步骤为已完成
+            if planning_flow and current_step_index is not None:
+                try:
+                    logger.info(f"Manus: 主动标记步骤 {current_step_index} 为已完成")
+                    await planning_flow._mark_step_completed()
+                    logger.info(f"Manus: 步骤 {current_step_index} 已被标记为已完成")
+                except Exception as e:
+                    logger.error(
+                        f"Manus: 标记步骤 {current_step_index} 完成时出错: {e}"
+                    )
+
+            return result
         finally:
             self.is_executing_planned_task = False
             logger.info(f"Manus: 完成计划步骤 {current_step_index}")
@@ -133,6 +151,8 @@ class Manus(ToolCallAgent):
                     {plan_status}
 
                     请考虑当前任务计划的上下文，选择最适合完成当前步骤的行动。
+                    只专注于完成当前步骤，不要尝试执行后续步骤。
+                    完成当前步骤后，系统会自动为您安排下一个步骤。
                     """
 
                     # 将规划上下文添加到系统提示

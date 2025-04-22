@@ -287,7 +287,9 @@ class PlanningFlow(BaseFlow):
             steps = plan_data.get("steps", [])
             step_statuses = plan_data.get("step_statuses", [])
 
-            logger.info(f"获取当前步骤信息 - 计划 {self.active_plan_id} 有 {len(steps)} 个步骤")
+            logger.info(
+                f"获取当前步骤信息 - 计划 {self.active_plan_id} 有 {len(steps)} 个步骤"
+            )
             logger.info(f"步骤状态: {step_statuses}")
 
             # 确保step_statuses与steps数量匹配
@@ -296,6 +298,36 @@ class PlanningFlow(BaseFlow):
                 logger.info(
                     f"为步骤 {len(step_statuses)-1} 添加默认状态: {PlanStepStatus.NOT_STARTED.value}"
                 )
+
+            # 检查是否有任何步骤处于"in_progress"状态
+            # 如果有，优先返回该步骤，确保它完成后再开始新步骤
+            in_progress_index = None
+            for i, status in enumerate(step_statuses):
+                if status == PlanStepStatus.IN_PROGRESS.value:
+                    in_progress_index = i
+                    break
+
+            if in_progress_index is not None:
+                # 找到一个正在进行中的步骤，返回它
+                step = steps[in_progress_index]
+                logger.info(f"找到进行中的步骤 {in_progress_index}: {step[:30]}...")
+
+                # 提取步骤类型（如果有）
+                step_info = {
+                    "text": step,
+                    "status": PlanStepStatus.IN_PROGRESS.value,
+                    "index": in_progress_index,
+                }
+
+                # 尝试提取步骤类型
+                import re
+
+                type_match = re.search(r"\[([A-Z_]+)\]", step)
+                if type_match:
+                    step_info["type"] = type_match.group(1).lower()
+                    logger.info(f"找到步骤类型: {step_info['type']}")
+
+                return in_progress_index, step_info
 
             # Find first non-completed step
             for i, step in enumerate(steps):
@@ -364,7 +396,9 @@ class PlanningFlow(BaseFlow):
                 f"正在使用代理 {executor.name if hasattr(executor, 'name') else 'Unknown'} 执行步骤 {self.current_step_index}"
             )
             step_result = await executor.run(step_prompt)
-            logger.info(f"步骤 {self.current_step_index} 执行完成: {step_result[:100]}...")
+            logger.info(
+                f"步骤 {self.current_step_index} 执行完成: {step_result[:100]}..."
+            )
 
             return step_result
         except Exception as e:
