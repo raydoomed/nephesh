@@ -16,6 +16,7 @@ from app.llm import LLM
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
+
 logger = logging.getLogger(__name__)
 
 _BROWSER_DESCRIPTION = """\
@@ -355,9 +356,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
                         # 验证URL是否有效
                         if not parsed_url.netloc:
-                            return ToolResult(
-                                error=f"搜索结果URL无效: {url_to_navigate}"
-                            )
+                            return ToolResult(error=f"搜索结果URL无效: {url_to_navigate}")
 
                         # 导航到URL，设置超时
                         page = await context.get_current_page()
@@ -532,7 +531,6 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         # 2. 根据目标智能提取相关内容
                         # 使用关键词匹配来获取与goal相关的段落
                         import re
-                        from collections import Counter
 
                         # 分析goal中的关键词
                         goal_keywords = re.findall(r"\w+", goal.lower())
@@ -552,9 +550,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                             para_words = re.findall(r"\w+", para.lower())
                             matches = sum(1 for kw in goal_keywords if kw in para_words)
 
-                            if (
-                                matches > 0 or len(paragraphs) <= 5
-                            ):  # 相关段落或总段落数少
+                            if matches > 0 or len(paragraphs) <= 5:  # 相关段落或总段落数少
                                 relevant_paragraphs.append(para)
 
                         # 如果没找到相关段落，则使用前几段加标题
@@ -567,9 +563,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         content = "\n\n".join(relevant_paragraphs)
 
                     except Exception as extract_error:
-                        logger.warning(
-                            f"优化内容提取失败，回退到标准方法: {extract_error}"
-                        )
+                        logger.warning(f"优化内容提取失败，回退到标准方法: {extract_error}")
                         # 回退到原始方法
                         import markdownify
 

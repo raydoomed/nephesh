@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Union
+from typing import Optional
 
 from pydantic import Field, model_validator
 
@@ -9,7 +9,6 @@ from app.flow.flow_factory import FlowFactory, FlowType
 from app.flow.planning import PlanningFlow
 from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.schema import AgentState
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.python_execute import PythonExecute

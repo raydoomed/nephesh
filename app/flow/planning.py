@@ -287,9 +287,7 @@ class PlanningFlow(BaseFlow):
             steps = plan_data.get("steps", [])
             step_statuses = plan_data.get("step_statuses", [])
 
-            logger.info(
-                f"获取当前步骤信息 - 计划 {self.active_plan_id} 有 {len(steps)} 个步骤"
-            )
+            logger.info(f"获取当前步骤信息 - 计划 {self.active_plan_id} 有 {len(steps)} 个步骤")
             logger.info(f"步骤状态: {step_statuses}")
 
             # 确保step_statuses与steps数量匹配
@@ -354,8 +352,8 @@ class PlanningFlow(BaseFlow):
     async def _execute_step(self, executor: BaseAgent, step_info: dict) -> str:
         """Execute the current step with the specified agent using agent.run()."""
         # Prepare context for the agent with current plan status
-        plan_status = await self._get_plan_text()
-        step_text = step_info.get("text", f"Step {self.current_step_index}")
+        await self._get_plan_text()
+        step_info.get("text", f"Step {self.current_step_index}")
 
         # Create a prompt for the agent to execute the current step
         step_prompt = self._create_step_prompt(step_info)
@@ -366,9 +364,7 @@ class PlanningFlow(BaseFlow):
                 f"正在使用代理 {executor.name if hasattr(executor, 'name') else 'Unknown'} 执行步骤 {self.current_step_index}"
             )
             step_result = await executor.run(step_prompt)
-            logger.info(
-                f"步骤 {self.current_step_index} 执行完成: {step_result[:100]}..."
-            )
+            logger.info(f"步骤 {self.current_step_index} 执行完成: {step_result[:100]}...")
 
             return step_result
         except Exception as e:

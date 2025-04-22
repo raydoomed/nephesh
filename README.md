@@ -1,117 +1,164 @@
-# OpenManus 项目开发计划
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/7f3b8746-eb7f-4661-9386-a5a19f9b648f" alt="logo" width="400" />
+  <h2>灵魂之径 · 思维共振</h2>
+  <p><i>灵魂之名，生命之源 — 源自希伯来古语</i></p>
+  <p><i>感知万象，洞察本质，超越常规思维的界限</i></p>
+  <p>基于大语言模型的智能代理平台，集成多种工具能力，支持复杂任务执行和自动化流程</p>
+  <p><i>以情感共鸣连接，融合前沿模型与智能矩阵，实现无限可能</i></p>
+</div>
 
-## 项目概述
+## 快速开始
 
-OpenManus 是一个功能强大的 AI 代理系统，旨在通过多种工具完成复杂任务。系统由多个组件构成，包括各种代理(Agent)类型、工具(Tool)集合以及执行流程(Flow)管理。
-- 后端核心文件：`app/agent/manus.py` - Manus代理实现
-- 后端运行文件：`main.py` - 项目入口点
-- 每次完成一个开发必须进行readme.md更新到最新状态
+只需一行代码即可运行Nephesh：
 
-## 系统架构
+```bash
+python main.py
+```
 
-- **代理(Agent)系统**：`app/agent/` 目录
-  - 基础代理：`app/agent/base.py`
-  - Manus代理：`app/agent/manus.py`
-  - 浏览器代理：`app/agent/browser.py`
-  - MCP代理：`app/agent/mcp.py`
-  - ReAct代理：`app/agent/react.py`
-  - SWE代理：`app/agent/swe.py`
-  - 工具调用代理：`app/agent/toolcall.py`
+## 安装指南
 
-- **执行流程(Flow)管理**：`app/flow/` 目录
-  - 基础流程：`app/flow/base.py`
-  - 规划流程：`app/flow/planning.py`
-  - 流程工厂：`app/flow/flow_factory.py`
+我们提供两种安装方法，推荐使用方法2（uv）以获得更快的安装速度和更好的依赖管理。
 
-- **工具(Tool)集合**：`app/tool/` 目录
-  - 基础工具：`app/tool/base.py`
-  - Bash工具：`app/tool/bash.py`
-  - 浏览器工具：`app/tool/browser_use_tool.py`
-  - 聊天完成工具：`app/tool/create_chat_completion.py`
-  - 深度研究工具：`app/tool/deep_research.py`
-  - 文件操作工具：`app/tool/file_operators.py`
-  - MCP工具：`app/tool/mcp.py`
-  - 规划工具：`app/tool/planning.py`
-  - Python执行工具：`app/tool/python_execute.py`
-  - 字符串替换编辑器：`app/tool/str_replace_editor.py`
-  - 终止工具：`app/tool/terminate.py`
-  - 工具集合：`app/tool/tool_collection.py`
-  - 网络搜索工具：`app/tool/web_search.py`
-  - 搜索引擎：`app/tool/search/` 目录
+<details>
+<summary><b>方法1：使用conda</b></summary>
 
-- **提示词(Prompt)模板**：`app/prompt/` 目录
-  - 浏览器提示词：`app/prompt/browser.py`
-  - 思维链提示词：`app/prompt/cot.py`
-  - Manus提示词：`app/prompt/manus.py`
-  - MCP提示词：`app/prompt/mcp.py`
-  - 规划提示词：`app/prompt/planning.py`
-  - SWE提示词：`app/prompt/swe.py`
-  - 工具调用提示词：`app/prompt/toolcall.py`
+1. 创建一个新的conda环境：
 
-- **沙箱(Sandbox)系统**：`app/sandbox/` 目录
-  - 沙箱客户端：`app/sandbox/client.py`
-  - 沙箱核心：`app/sandbox/core/` 目录
-    - 沙箱实现：`app/sandbox/core/sandbox.py`
-    - 终端实现：`app/sandbox/core/terminal.py`
-    - 异常处理：`app/sandbox/core/exceptions.py`
-    - 管理器：`app/sandbox/core/manager.py`
+```bash
+conda create -n n python=3.12
+conda activate nephesh
+```
 
-- **MCP系统**：`app/mcp/` 目录
-  - 服务器：`app/mcp/server.py`
+2. 克隆仓库：
 
-- **LLM处理**：`app/llm.py` - 大型语言模型交互处理
-- **配置管理**：`app/config.py` - 系统配置
-- **类型定义**：`app/schema.py` - 数据模型和类型定义
-- **异常处理**：`app/exceptions.py` - 自定义异常
-- **日志系统**：`app/logger.py` - 日志处理
+```bash
+git clone https://github.com/raydoomed/OpenManus.git
+cd nephesh
+```
+
+3. 安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+</details>
+
+<details>
+<summary><b>方法2：使用uv（推荐）</b></summary>
+
+1. 安装uv（一个快速的Python包安装和解析器）：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. 克隆仓库：
+
+```bash
+git clone https://github.com/raydoomed/nephesh.git
+cd nephesh
+```
+
+3. 创建并激活虚拟环境：
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate  # 在Unix/macOS上
+# 或在Windows上：
+# .venv\Scripts\activate
+```
+
+4. 安装依赖：
+
+```bash
+uv pip install -r requirements.txt
+```
+</details>
+
+<details>
+<summary><b>浏览器自动化工具（可选）</b></summary>
+
+```bash
+playwright install
+```
+</details>
+
+## 配置
+
+Nephesh需要配置LLM API才能运行。按照以下步骤设置：
+
+1. 在`config`目录中创建配置文件：
+
+```bash
+cp config/config.example.toml config/config.toml
+```
+
+2. 编辑`config/config.toml`添加API密钥和自定义设置：
+
+```toml
+# 全局LLM配置
+[llm]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+api_key = "sk-..."  # 替换为您的实际API密钥
+max_tokens = 4096
+temperature = 0.0
+
+# 特定LLM模型的可选配置
+[llm.vision]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+api_key = "sk-..."  # 替换为您的实际API密钥
+```
+# Nephesh 项目开发计划
 
 ## 后端开发计划
 
-### 1. Manus 代理增强 (文件: `app/agent/manus.py`)
+### 1. Nephesh 代理增强
 
 - [ ] 增加`act`方法优化，提升工具选择策略
-- [ ] 添加任务规划能力，自动分解复杂任务，与`app/flow/planning.py`集成
+- [x] 添加任务规划能力，自动分解复杂任务
 - [ ] 添加记忆压缩和摘要功能，优化长对话处理
-- [ ] 集成所有可用工具，包括`WebSearch`(`app/tool/web_search.py`)、`DeepResearch`(`app/tool/deep_research.py`)、文件操作等
+- [ ] 集成所有可用工具，包括`WebSearch、文件操作等
 - [ ] 增加自我评估功能，对完成任务质量进行自评
-- [ ] 集成沙箱(Sandbox)功能，实现安全的代码执行环境（暂时不集成，后续再说），涉及`app/sandbox/`目录
-- [ ] 整合MCP(Model Context Protocol)客户端，支持与外部MCP服务器交互，涉及`app/tool/mcp.py`和`app/mcp/server.py`
+- [ ] 集成沙箱(Sandbox)功能，实现安全的代码执行环境
+- [ ] 整合MCP(Model Context Protocol)客户端，支持与外部MCP服务器交互
 
 ### 2. 系统集成增强
 
-- [ ] 完善 MCP 客户端集成，实现与外部服务无缝连接，涉及`app/agent/mcp.py`和`app/tool/mcp.py`
-- [ ] 增加多代理协作能力，使不同专长代理能协同工作，修改`app/flow/`下的相关文件
-- [ ] 优化沙箱环境，提升代码执行安全性和效率，涉及`app/sandbox/core/`下的文件
-- [ ] 增强浏览器自动化能力，支持更复杂的网页交互，修改`app/tool/browser_use_tool.py`和`app/agent/browser.py`
+- [ ] 完善 MCP 客户端集成，实现与外部服务无缝连接
+- [ ] 增加多代理协作能力，使不同专长代理能协同工作
+- [ ] 优化沙箱环境，提升代码执行安全性和效率，涉及
+- [ ] 增强浏览器自动化能力，支持更复杂的网页交互
 
 ### 3. 性能优化
 
-- [ ] 优化 LLM 调用策略，减少不必要的 API 请求，修改`app/llm.py`
+- [ ] 优化 LLM 调用策略，减少不必要的 API 请求
 - [ ] 实现中间结果缓存机制，避免重复计算，涉及多个工具文件
-- [ ] 添加流式处理大型文档的能力，修改文件操作相关工具(`app/tool/file_operators.py`和`app/tool/str_replace_editor.py`)
-- [ ] 优化工具执行并行能力，支持并发任务，修改`app/tool/tool_collection.py`
+- [ ] 添加流式处理大型文档的能力，修改文件操作相关工具
+- [ ] 优化工具执行并行能力，支持并发任务
 
 ### 4. 用户交互改进
 
-- [ ] 增加更多反馈机制，提高代理任务透明度，修改`app/agent/base.py`和`app/agent/manus.py`
-- [ ] 改进错误处理和恢复机制，修改`app/exceptions.py`和各代理文件
-- [ ] 添加用户确认步骤，允许用户干预关键决策，修改`app/agent/manus.py`
-- [ ] 实现进度报告功能，提供任务执行状态，修改`app/agent/base.py`和`app/agent/manus.py`
+- [ ] 增加更多反馈机制，提高代理任务透明度
+- [ ] 改进错误处理和恢复机制
+- [ ] 添加用户确认步骤，允许用户干预关键决策
+- [ ] 实现进度报告功能，提供任务执行状态
 
-### 5. 工具扩展 (目录: `app/tool/`)
+### 5. 工具扩展
 
-- [ ] 增加数据库操作工具 (新建`app/tool/database.py`)
-- [ ] 开发图像处理工具 (新建`app/tool/image_processing.py`)
-- [ ] 增强文件处理工具，支持更多格式，修改`app/tool/file_operators.py`
-- [ ] 添加音频处理工具 (新建`app/tool/audio_processing.py`)
-- [ ] 开发 API 调用封装工具 (新建`app/tool/api_caller.py`)
+- [ ] 增加数据库操作工具
+- [ ] 开发图像处理工具
+- [ ] 增强文件处理工具，支持更多格式
+- [ ] 添加音频处理工具
+- [ ] 开发 API 调用封装工具
 
 ### 6. 测试和文档
 
-- [ ] 编写全面的单元测试和集成测试 (新建`tests/`目录下相关文件)
-- [ ] 创建详细 API 文档 (新建`docs/api/`目录)
-- [ ] 编写用户使用指南和示例 (新建`docs/user_guide/`和`examples/`目录下文件)
-- [ ] 实现自动化测试流程 (新建`tests/automation/`目录)
+- [ ] 编写全面的单元测试和集成测试
+- [ ] 创建详细 API 文档
+- [ ] 编写用户使用指南和示例
+- [ ] 实现自动化测试流程
 
 ## 前端开发计划
 
@@ -176,42 +223,15 @@ OpenManus 是一个功能强大的 AI 代理系统，旨在通过多种工具完
 - [ ] 实现用户确认流程UI，允许代理在关键步骤请求用户确认
 - [ ] 设计并行任务监控界面，显示多个并行执行的工具状态
 
-## 优先级任务
 
-### 后端
+## 如何贡献
 
-1. 完善 Manus 代理核心功能，特别是任务规划和推理能力 (`app/agent/manus.py`)
-2. 扩展工具集合，特别是搜索和深度研究工具 (`app/tool/web_search.py`和`app/tool/deep_research.py`)
-3. 优化用户交互和错误处理机制 (`app/agent/base.py`和`app/exceptions.py`)
-4. 实现多代理协作系统 (`app/flow/`目录)
+敬请期待...
 
-### 前端
+## 社区
 
-1. 开发基础聊天界面和消息展示
-2. 实现工具调用可视化和结果展示
-3. 设计任务规划和执行流程可视化
-4. 创建沙箱和MCP连接状态监控界面（沙箱暂时不创建，后续再说）
-5. 开发用户认证和设置界面
+敬请期待...
 
-## 技术债务
+## 赞助商
 
-- 重构工具调用机制，使其更加模块化 (`app/tool/tool_collection.py`和`app/agent/toolcall.py`)
-- 优化内存管理，减少长时间运行时的内存占用 (`app/llm.py`和`app/agent/base.py`)
-- 标准化错误处理流程 (`app/exceptions.py`)
-- 重构配置管理系统 (`app/config.py`)
-- 统一前后端数据交换格式 (`app/schema.py`)
-- 提升组件复用率
-
-## 下一步行动计划
-
-1. 对 Manus 类进行功能扩展实现，添加上述缺失功能 (`app/agent/manus.py`)
-2. 开发前端基础界面框架和核心聊天功能
-3. 创建测试套件验证新功能 (`tests/`目录)
-4. 编写详细文档说明使用方法和最佳实践 (`docs/`目录)
-5. 逐步集成更多高级工具到 Manus 代理 (`app/tool/`目录)
-6. 实现前后端基础集成，展示工具执行能力
-
-## 开发规则
-1. 不准使用模拟数据进行开发，必须使用真实的LLM交互数据
-2. 不准创建测试脚本，一切以main.py实际后端结果来解决问题
-3. 不准使用任何硬编码方式
+敬请期待...
