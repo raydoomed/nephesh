@@ -250,8 +250,47 @@ class ToolCallAgent(ReActAgent):
         logger.info(f"✨ Cleanup complete for agent '{self.name}'.")
 
     async def run(self, request: Optional[str] = None) -> str:
-        """Run the agent with cleanup when done."""
+        """运行代理，执行工具调用直到完成
+
+        Args:
+            request: 初始用户请求
+
+        Returns:
+            执行结果
+        """
         try:
-            return await super().run(request)
+            response = await super().run(request)
+
+            # 检查是否因为达到max_steps而终止，如果是则尝试优雅地结束当前任务
+            if (
+                self.state == AgentState.FINISHED
+                and self.current_step >= self.max_steps
+            ):
+                logger.warning(
+                    f"ToolCallAgent强制终止: 已达到最大步数 {self.max_steps}"
+                )
+
+                # 如果是特殊工具，尝试调用terminate工具来结束任务
+                for tool_name in self.special_tool_names:
+                    if tool_name == "terminate":
+                        try:
+                            terminate_tool = self.available_tools.get_tool("terminate")
+                            if terminate_tool:
+                                tool_result = await terminate_tool.execute(
+                                    {"status": "force_complete"}
+                                )
+                                logger.info(f"强制调用终止工具完成任务: {tool_result}")
+
+                                # 添加强制终止消息
+                                self.memory.add_message(
+                                    Message.system_message(
+                                        "已达到最大步数限制，系统强制完成当前步骤。"
+                                    )
+                                )
+                                break
+                        except Exception as e:
+                            logger.error(f"强制终止工具调用失败: {e}")
+
+            return response
         finally:
             await self.cleanup()

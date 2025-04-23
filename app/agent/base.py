@@ -148,8 +148,13 @@ class BaseAgent(BaseModel, ABC):
 
             if self.current_step >= self.max_steps:
                 self.current_step = 0
-                self.state = AgentState.IDLE
-                results.append(f"Terminated: Reached max steps ({self.max_steps})")
+                self.state = AgentState.FINISHED
+                results.append(
+                    f"Terminated: Reached max steps ({self.max_steps}). Marking step as completed and forcing completion."
+                )
+                logger.warning(
+                    f"Agent {self.name} reached max_steps limit of {self.max_steps}. Forcing step completion."
+                )
         await SANDBOX_CLIENT.cleanup()
         return "\n".join(results) if results else "No steps executed"
 
@@ -159,6 +164,16 @@ class BaseAgent(BaseModel, ABC):
 
         Must be implemented by subclasses to define specific behavior.
         """
+        # 在接近最大步数时添加紧急提示
+        if self.current_step == self.max_steps - 1:
+            emergency_msg = "这是最后一步，必须立即完成当前任务！"
+            self.update_memory("system", emergency_msg)
+            logger.warning(f"Agent approaching max steps: {emergency_msg}")
+        # 如果已经是最后一步，强制将状态设为FINISHED
+        elif self.current_step >= self.max_steps:
+            self.state = AgentState.FINISHED
+            logger.warning(f"已达到最大步数 {self.max_steps}，强制终止当前步骤")
+            return f"步骤已达到最大限制 {self.max_steps}，强制完成"
 
     def handle_stuck_state(self):
         """Handle stuck state by adding a prompt to change strategy"""

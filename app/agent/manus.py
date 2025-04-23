@@ -27,7 +27,7 @@ class Manus(ToolCallAgent):
     next_step_prompt: str = NEXT_STEP_PROMPT
 
     max_observe: int = 10000
-    max_steps: int = 20
+    max_steps: int = 5
 
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
@@ -41,6 +41,7 @@ class Manus(ToolCallAgent):
     browser_context_helper: Optional[BrowserContextHelper] = None
     planning_flow: Optional[PlanningFlow] = None
     is_executing_planned_task: bool = False
+    current_step: int = 0
 
     @model_validator(mode="after")
     def initialize_helper(self) -> "Manus":
@@ -96,9 +97,20 @@ class Manus(ToolCallAgent):
         # 设置执行状态和上下文
         self.is_executing_planned_task = True
 
+        # 重置步骤计数器，确保每个计划步骤有独立的步数限制
+        self.current_step = 0
+
         # 保存当前规划流程和步骤索引，以便think方法使用
         if planning_flow:
             self.planning_flow = planning_flow
+
+        # 添加步骤限制提示
+        step_prompt = f"""
+{step_prompt}
+
+注意：你必须在{self.max_steps}步内完成此任务，否则系统将自动结束当前步骤。
+请高效规划你的行动，每一步都要有实质性进展。
+"""
 
         # 记录正在执行的步骤
         logger.info(f"Manus: 执行计划步骤 {current_step_index} - {step_prompt[:50]}...")
@@ -136,6 +148,18 @@ class Manus(ToolCallAgent):
         modified = False
 
         try:
+            # 如果接近最大步数，添加紧急完成提示
+            if self.current_step >= self.max_steps // 2:
+                urgent_context = f"""
+                当前已执行{self.current_step}步，最多允许{self.max_steps}步！
+                剩余步数: {self.max_steps - self.current_step}步，请注意规划剩余步骤，高效完成当前任务。
+                """
+                self.next_step_prompt = f"{urgent_context}\n{self.next_step_prompt}"
+                modified = True
+                logger.info(
+                    f"Manus: 添加步数提示，当前步数: {self.current_step}/{self.max_steps}"
+                )
+
             # 1. 如果在执行规划任务，添加规划上下文到系统提示
             if self.is_executing_planned_task and self.planning_flow:
                 try:
