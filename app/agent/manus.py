@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import ClassVar, Dict, Optional
 
 from pydantic import Field, model_validator
 
@@ -26,8 +26,28 @@ class Manus(ToolCallAgent):
     system_prompt: str = SYSTEM_PROMPT.format(directory=config.workspace_root)
     next_step_prompt: str = NEXT_STEP_PROMPT
 
+    # 配置参数，可以从配置文件加载
     max_observe: int = 10000
-    max_steps: int = 5
+    max_steps: int = Field(
+        default=5, description="Maximum steps allowed for task execution"
+    )
+
+    # 提示模板
+    STEP_LIMIT_TEMPLATE: ClassVar[
+        str
+    ] = """
+{prompt}
+
+注意：你必须在{max_steps}步内完成此任务，否则系统将自动结束当前步骤。
+请高效规划你的行动，每一步都要有实质性进展。
+"""
+
+    URGENT_TEMPLATE: ClassVar[
+        str
+    ] = """
+当前已执行{current_step}步，最多允许{max_steps}步！
+剩余步数: {remaining_steps}步，请注意规划剩余步骤，高效完成当前任务。
+"""
 
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
@@ -84,7 +104,7 @@ class Manus(ToolCallAgent):
     async def execute_planned_step(
         self, step_prompt: str, current_step_index: int = None, planning_flow=None
     ) -> str:
-        """执行规划好的步骤
+        """执行规划好的步骤，并在执行完成后自动标记步骤为已完成
 
         Args:
             step_prompt: 步骤提示
@@ -93,6 +113,10 @@ class Manus(ToolCallAgent):
 
         Returns:
             步骤执行结果
+
+        Note:
+            此方法执行完成后会自动调用planning_flow._mark_step_completed()
+            来标记当前步骤为已完成状态，不需要外部再次调用标记方法
         """
         # 设置执行状态和上下文
         self.is_executing_planned_task = True
@@ -104,13 +128,10 @@ class Manus(ToolCallAgent):
         if planning_flow:
             self.planning_flow = planning_flow
 
-        # 添加步骤限制提示
-        step_prompt = f"""
-{step_prompt}
-
-注意：你必须在{self.max_steps}步内完成此任务，否则系统将自动结束当前步骤。
-请高效规划你的行动，每一步都要有实质性进展。
-"""
+        # 添加步骤限制提示，使用模板
+        step_prompt = self.STEP_LIMIT_TEMPLATE.format(
+            prompt=step_prompt, max_steps=self.max_steps
+        )
 
         # 记录正在执行的步骤
         logger.info(f"Manus: 执行计划步骤 {current_step_index} - {step_prompt[:50]}...")
@@ -124,13 +145,13 @@ class Manus(ToolCallAgent):
                 f"Manus: 步骤 {current_step_index} 执行完成，结果: {result[:100]}..."
             )
 
-            # 如果planning_flow存在，主动标记当前步骤为已完成
+            # 如果planning_flow存在，主动标记当前步骤为已完成，但不重复记录日志
             if planning_flow and current_step_index is not None:
                 try:
-                    logger.info(f"Manus: 主动标记步骤 {current_step_index} 为已完成")
+                    # 不记录日志，避免与PlanningFlow._mark_step_completed中的日志重复
                     await planning_flow._mark_step_completed()
-                    logger.info(f"Manus: 步骤 {current_step_index} 已被标记为已完成")
                 except Exception as e:
+                    # 只在发生错误时记录日志
                     logger.error(
                         f"Manus: 标记步骤 {current_step_index} 完成时出错: {e}"
                     )
@@ -138,7 +159,7 @@ class Manus(ToolCallAgent):
             return result
         finally:
             self.is_executing_planned_task = False
-            logger.info(f"Manus: 完成计划步骤 {current_step_index}")
+            logger.debug(f"Manus: 完成计划步骤 {current_step_index}")  # 降低日志级别
 
     async def think(self) -> bool:
         """处理当前状态并决定下一步行动，考虑规划上下文或浏览器上下文。"""
@@ -150,10 +171,11 @@ class Manus(ToolCallAgent):
         try:
             # 如果接近最大步数，添加紧急完成提示
             if self.current_step >= self.max_steps // 2:
-                urgent_context = f"""
-                当前已执行{self.current_step}步，最多允许{self.max_steps}步！
-                剩余步数: {self.max_steps - self.current_step}步，请注意规划剩余步骤，高效完成当前任务。
-                """
+                urgent_context = self.URGENT_TEMPLATE.format(
+                    current_step=self.current_step,
+                    max_steps=self.max_steps,
+                    remaining_steps=self.max_steps - self.current_step,
+                )
                 self.next_step_prompt = f"{urgent_context}\n{self.next_step_prompt}"
                 modified = True
                 logger.info(
