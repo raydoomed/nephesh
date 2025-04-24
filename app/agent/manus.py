@@ -29,7 +29,7 @@ class Manus(ToolCallAgent):
     # 配置参数，可以从配置文件加载
     max_observe: int = 10000
     max_steps: int = Field(
-        default=3, description="Maximum steps allowed for task execution"
+        default=5, description="Maximum steps allowed for task execution"
     )
     continuation_mode: bool = Field(
         default=True,
