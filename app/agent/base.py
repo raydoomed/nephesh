@@ -99,19 +99,31 @@ class BaseAgent(BaseModel, ABC):
         Raises:
             ValueError: If the role is unsupported.
         """
-        message_map = {
-            "user": Message.user_message,
-            "system": Message.system_message,
-            "assistant": Message.assistant_message,
-            "tool": lambda content, **kw: Message.tool_message(content, **kw),
-        }
-
-        if role not in message_map:
+        if role not in ["user", "system", "assistant", "tool"]:
             raise ValueError(f"Unsupported message role: {role}")
 
-        # Create message with appropriate parameters based on role
-        kwargs = {"base64_image": base64_image, **(kwargs if role == "tool" else {})}
-        self.memory.add_message(message_map[role](content, **kwargs))
+        # 根据角色类型创建适当的消息
+        if role == "user":
+            message = Message.user_message(content, base64_image=base64_image)
+        elif role == "system":
+            message = Message.system_message(content)
+        elif role == "assistant":
+            message = Message.assistant_message(content, base64_image=base64_image)
+        elif role == "tool":
+            # 确保tool消息有必要的参数
+            if "name" not in kwargs or "tool_call_id" not in kwargs:
+                raise ValueError(
+                    "Tool messages require 'name' and 'tool_call_id' parameters"
+                )
+            message = Message.tool_message(
+                content,
+                name=kwargs.get("name"),
+                tool_call_id=kwargs.get("tool_call_id"),
+                base64_image=base64_image,
+            )
+
+        # 添加消息到内存
+        self.memory.add_message(message)
 
     async def run(self, request: Optional[str] = None) -> str:
         """Execute the agent's main loop asynchronously.
@@ -147,14 +159,26 @@ class BaseAgent(BaseModel, ABC):
                 results.append(f"Step {self.current_step}: {step_result}")
 
             if self.current_step >= self.max_steps:
-                self.current_step = 0
-                self.state = AgentState.FINISHED
-                results.append(
-                    f"Terminated: Reached max steps ({self.max_steps}). Marking step as completed and forcing completion."
-                )
-                logger.warning(
-                    f"Agent {self.name} reached max_steps limit of {self.max_steps}. Forcing step completion."
-                )
+                # 检查是否支持继续模式
+                continuation_mode = getattr(self, "continuation_mode", False)
+                if continuation_mode:
+                    self.current_step = 0
+                    continuation_msg = f"已达到最大步数 {self.max_steps}，但任务尚未完成。任务将继续执行。"
+                    self.update_memory("system", continuation_msg)
+                    logger.warning(
+                        f"Agent {self.name} reached max_steps limit of {self.max_steps}. Continuing task execution."
+                    )
+                    results.append(continuation_msg)
+                else:
+                    # 如果不支持继续模式，则按原逻辑强制完成
+                    self.current_step = 0
+                    self.state = AgentState.FINISHED
+                    results.append(
+                        f"Terminated: Reached max steps ({self.max_steps}). Marking step as completed and forcing completion."
+                    )
+                    logger.warning(
+                        f"Agent {self.name} reached max_steps limit of {self.max_steps}. Forcing step completion."
+                    )
         await SANDBOX_CLIENT.cleanup()
         return "\n".join(results) if results else "No steps executed"
 
@@ -166,14 +190,27 @@ class BaseAgent(BaseModel, ABC):
         """
         # 在接近最大步数时添加紧急提示
         if self.current_step == self.max_steps - 1:
-            emergency_msg = "这是最后一步，必须立即完成当前任务！"
+            # 检查是否支持继续模式
+            continuation_mode = getattr(self, "continuation_mode", False)
+            if continuation_mode:
+                emergency_msg = f"当前已执行 {self.current_step} 步，即将达到最大步数 {self.max_steps}。如果任务无法在下一步完成，请进行阶段性总结，任务将在重置步数后继续执行。"
+            else:
+                emergency_msg = "这是最后一步，必须立即完成当前任务！"
             self.update_memory("system", emergency_msg)
             logger.warning(f"Agent approaching max steps: {emergency_msg}")
         # 如果已经是最后一步，强制将状态设为FINISHED
         elif self.current_step >= self.max_steps:
-            self.state = AgentState.FINISHED
-            logger.warning(f"已达到最大步数 {self.max_steps}，强制终止当前步骤")
-            return f"步骤已达到最大限制 {self.max_steps}，强制完成"
+            # 检查是否支持继续模式
+            continuation_mode = getattr(self, "continuation_mode", False)
+            if not continuation_mode:
+                self.state = AgentState.FINISHED
+                logger.warning(f"已达到最大步数 {self.max_steps}，强制终止当前步骤")
+                return f"步骤已达到最大限制 {self.max_steps}，强制完成"
+            else:
+                # 在继续模式下，重置步数并继续执行
+                self.current_step = 0
+                logger.warning(f"已达到最大步数 {self.max_steps}，重置步数并继续执行")
+                return f"步骤已达到最大限制 {self.max_steps}，重置步数并继续任务"
 
     def handle_stuck_state(self):
         """Handle stuck state by adding a prompt to change strategy"""

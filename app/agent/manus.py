@@ -29,7 +29,11 @@ class Manus(ToolCallAgent):
     # 配置参数，可以从配置文件加载
     max_observe: int = 10000
     max_steps: int = Field(
-        default=5, description="Maximum steps allowed for task execution"
+        default=3, description="Maximum steps allowed for task execution"
+    )
+    continuation_mode: bool = Field(
+        default=True,
+        description="Whether to allow task execution to continue after reaching max steps",
     )
 
     # 提示模板
@@ -38,7 +42,7 @@ class Manus(ToolCallAgent):
     ] = """
 {prompt}
 
-注意：你必须在{max_steps}步内完成此任务，否则系统将自动结束当前步骤。
+注意：你应该尽量在{max_steps}步内完成此任务。当前任务的执行步数限制为{max_steps}步。
 请高效规划你的行动，每一步都要有实质性进展。
 """
 
@@ -104,7 +108,7 @@ class Manus(ToolCallAgent):
     async def execute_planned_step(
         self, step_prompt: str, current_step_index: int = None, planning_flow=None
     ) -> str:
-        """执行规划好的步骤，并在执行完成后自动标记步骤为已完成
+        """执行规划好的步骤，将标记步骤为已完成的逻辑交给planning_flow处理
 
         Args:
             step_prompt: 步骤提示
@@ -115,8 +119,8 @@ class Manus(ToolCallAgent):
             步骤执行结果
 
         Note:
-            此方法执行完成后会自动调用planning_flow._mark_step_completed()
-            来标记当前步骤为已完成状态，不需要外部再次调用标记方法
+            此方法不再自动调用planning_flow._mark_step_completed()标记步骤完成
+            而是由PlanningFlow根据返回结果判断步骤是否真正完成
         """
         # 设置执行状态和上下文
         self.is_executing_planned_task = True
@@ -145,16 +149,8 @@ class Manus(ToolCallAgent):
                 f"Manus: 步骤 {current_step_index} 执行完成，结果: {result[:100]}..."
             )
 
-            # 如果planning_flow存在，主动标记当前步骤为已完成，但不重复记录日志
-            if planning_flow and current_step_index is not None:
-                try:
-                    # 不记录日志，避免与PlanningFlow._mark_step_completed中的日志重复
-                    await planning_flow._mark_step_completed()
-                except Exception as e:
-                    # 只在发生错误时记录日志
-                    logger.error(
-                        f"Manus: 标记步骤 {current_step_index} 完成时出错: {e}"
-                    )
+            # 不再自动标记步骤完成，这个逻辑由PlanningFlow处理
+            # 避免了重复标记和状态不一致的问题
 
             return result
         finally:

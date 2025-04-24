@@ -78,6 +78,7 @@ class PlanningFlow(BaseFlow):
 
         当前执行步骤: {step_index}
         步骤内容: {step_text}
+        {previous_result}
 
         请根据上述步骤内容，选择适当的工具和策略来完成任务。
         完成后，请提供一个简短的执行结果摘要，说明您完成了什么。
@@ -88,6 +89,8 @@ class PlanningFlow(BaseFlow):
     executor_keys: List[str] = Field(default_factory=list)
     active_plan_id: str = Field(default_factory=lambda: f"plan_{int(time.time())}")
     current_step_index: Optional[int] = None
+    # 添加存储步骤中间结果的字典
+    step_intermediate_results: Dict[str, str] = Field(default_factory=dict)
 
     def __init__(
         self, agents: Union[BaseAgent, List[BaseAgent], Dict[str, BaseAgent]], **data
@@ -153,6 +156,13 @@ class PlanningFlow(BaseFlow):
             # 初始结果包含计划状态
             result = f"任务计划:\n\n{initial_plan}\n\n执行结果:\n\n"
 
+            # 收集所有步骤的详细执行结果
+            step_results = []
+
+            # 记录每个步骤的执行次数，防止无限循环
+            step_execution_count = {}
+            max_executions_per_step = 3  # 每个步骤最多执行3次
+
             while True:
                 # Get current step to execute
                 self.current_step_index, step_info = await self._get_current_step_info()
@@ -160,9 +170,31 @@ class PlanningFlow(BaseFlow):
                 # Exit if no more steps or plan completed
                 if self.current_step_index is None:
                     logger.info("PlanningFlow: 所有步骤已完成，准备结束计划")
-                    final_message = await self._finalize_plan()
+                    final_message = await self._finalize_plan(step_results)
                     result += f"\n{final_message}\n"
                     break
+
+                # 检查步骤执行次数，防止无限循环
+                step_key = f"step_{self.current_step_index}"
+                step_execution_count[step_key] = (
+                    step_execution_count.get(step_key, 0) + 1
+                )
+
+                if step_execution_count[step_key] > max_executions_per_step:
+                    logger.warning(
+                        f"PlanningFlow: 步骤 {self.current_step_index} 已执行 {max_executions_per_step} 次，强制标记为完成并继续"
+                    )
+                    await self._mark_step_completed()
+                    step_result = f"步骤 {self.current_step_index}: {step_info.get('text', '')} - 已达到最大尝试次数，强制完成。"
+                    step_results.append(
+                        {
+                            "step_index": self.current_step_index,
+                            "step_text": step_info.get("text", ""),
+                            "result": "已达到最大尝试次数，强制完成",
+                        }
+                    )
+                    result += f"{step_result}\n\n"
+                    continue
 
                 # Execute current step with appropriate agent
                 step_type = step_info.get("type") if step_info else None
@@ -181,26 +213,74 @@ class PlanningFlow(BaseFlow):
                 if hasattr(executor, "execute_planned_step") and callable(
                     getattr(executor, "execute_planned_step")
                 ):
-                    step_prompt = self._create_step_prompt(step_info)
+                    # 获取中间结果（如果有）
+                    previous_result = self.step_intermediate_results.get(step_key, "")
+
+                    # 创建包含之前结果的步骤提示
+                    step_prompt = self._create_step_prompt(step_info, previous_result)
+
                     # 传递当前步骤索引和规划流程实例
                     step_result = await executor.execute_planned_step(
                         step_prompt,
                         current_step_index=self.current_step_index,
                         planning_flow=self,
                     )
-                    # 注意：execute_planned_step方法会自动标记步骤完成，这里不需要再标记
+
+                    # 检查结果中是否包含特定的继续标记，表明任务未完全完成
+                    is_incomplete = (
+                        "任务将继续执行" in step_result
+                        or "重置步数并继续任务" in step_result
+                        or "任务尚未完成" in step_result
+                    )
+
+                    if (
+                        is_incomplete
+                        and step_execution_count[step_key] < max_executions_per_step
+                    ):
+                        # 任务未完成，保存中间结果以供下次继续使用
+                        logger.info(
+                            f"步骤 {self.current_step_index} 未完全完成，将在下一轮继续执行，保存中间结果"
+                        )
+                        # 保存中间结果
+                        self.step_intermediate_results[step_key] = step_result
+                    else:
+                        # 任务已完成或达到最大执行次数，标记为已完成并清除中间结果
+                        await self._mark_step_completed()
+                        if step_key in self.step_intermediate_results:
+                            del self.step_intermediate_results[step_key]
                 else:
                     # 如果代理没有execute_planned_step方法，则使用_execute_step
                     step_result = await self._execute_step(executor, step_info)
-                    # 这种情况下需要手动标记步骤完成
-                    await self._mark_step_completed()
+                    # _execute_step方法中已经处理了步骤完成状态的标记
+
+                # 收集步骤结果
+                step_results.append(
+                    {
+                        "step_index": self.current_step_index,
+                        "step_text": step_info.get("text", ""),
+                        "result": step_result,
+                    }
+                )
 
                 # 将步骤结果添加到总结果
                 result += f"步骤 {self.current_step_index}: {step_info.get('text', '')}\n{step_result}\n\n"
 
                 # 获取更新后的计划状态
                 updated_status = await self._get_plan_text()
-                logger.info(f"PlanningFlow: 步骤 {self.current_step_index} 已完成")
+                # 修改日志消息，明确表示这只是当前轮次的处理结束
+                if (
+                    "任务将继续执行" in step_result
+                    or "重置步数并继续任务" in step_result
+                    or "任务尚未完成" in step_result
+                ):
+                    logger.info(
+                        f"PlanningFlow: 步骤 {self.current_step_index} 当前轮次处理完毕，但步骤尚未完成，将继续执行"
+                    )
+                else:
+                    logger.info(
+                        f"PlanningFlow: 步骤 {self.current_step_index} 完全处理完毕"
+                    )
+
                 # 详细状态只在调试模式下输出
                 logger.info(f"更新后的计划状态:\n{updated_status}")
 
@@ -222,20 +302,28 @@ class PlanningFlow(BaseFlow):
             logger.error(f"Error in PlanningFlow: {str(e)}", exc_info=True)
             return f"Execution failed: {str(e)}"
 
-    def _create_step_prompt(self, step_info: dict) -> str:
+    def _create_step_prompt(self, step_info: dict, previous_result: str = "") -> str:
         """创建用于执行步骤的提示
 
         Args:
             step_info: 步骤信息
+            previous_result: 之前的执行结果（如果有）
 
         Returns:
             步骤提示
         """
         step_text = step_info.get("text", f"Step {self.current_step_index}")
 
+        # 如果有之前的结果，添加到提示中
+        previous_result_text = ""
+        if previous_result:
+            previous_result_text = f"\n之前执行的结果: \n{previous_result}\n\n请继续从您上次停止的地方继续执行，不要重复已完成的工作。"
+
         # 使用模板创建步骤提示
         return self.STEP_PROMPT_TEMPLATE.format(
-            step_index=self.current_step_index, step_text=step_text
+            step_index=self.current_step_index,
+            step_text=step_text,
+            previous_result=previous_result_text,
         )
 
     async def _create_initial_plan(self, request: str) -> None:
@@ -374,27 +462,9 @@ class PlanningFlow(BaseFlow):
                         step_info["type"] = type_match.group(1).lower()
                         logger.debug(f"找到步骤类型: {step_info['type']}")
 
-                    # Mark current step as in_progress
-                    try:
-                        logger.info(f"开始执行步骤 {i}: {step[:30]}...")
-                        await self.planning_tool.execute(
-                            command="mark_step",
-                            plan_id=self.active_plan_id,
-                            step_index=i,
-                            step_status=PlanStepStatus.IN_PROGRESS.value,
-                        )
-                    except Exception as e:
-                        logger.warning(f"标记步骤 {i} 为进行中状态失败: {e}")
-                        # Update step status directly if needed
-                        if i < len(step_statuses):
-                            step_statuses[i] = PlanStepStatus.IN_PROGRESS.value
-                        else:
-                            while len(step_statuses) < i:
-                                step_statuses.append(PlanStepStatus.NOT_STARTED.value)
-                            step_statuses.append(PlanStepStatus.IN_PROGRESS.value)
-
-                        plan_data["step_statuses"] = step_statuses
-                        logger.debug(f"已手动更新步骤 {i} 状态为进行中")
+                    # 使用统一的方法标记当前步骤为进行中
+                    logger.info(f"开始执行步骤 {i}: {step[:30]}...")
+                    await self._update_step_status(i, PlanStepStatus.IN_PROGRESS.value)
 
                     return i, step_info
 
@@ -410,8 +480,12 @@ class PlanningFlow(BaseFlow):
         # Prepare context for the agent with current plan status
         await self._get_plan_text()
 
-        # 创建步骤提示
-        step_prompt = self._create_step_prompt(step_info)
+        # 获取中间结果（如果有）
+        step_key = f"step_{self.current_step_index}"
+        previous_result = self.step_intermediate_results.get(step_key, "")
+
+        # 创建步骤提示，包含之前的结果
+        step_prompt = self._create_step_prompt(step_info, previous_result)
 
         # Use agent.run() to execute the step
         try:
@@ -422,6 +496,27 @@ class PlanningFlow(BaseFlow):
             logger.info(
                 f"步骤 {self.current_step_index} 执行完成: {step_result[:100]}..."
             )
+
+            # 检查结果中是否包含特定的继续标记，表明任务未完全完成
+            is_incomplete = (
+                "任务将继续执行" in step_result
+                or "重置步数并继续任务" in step_result
+                or "任务尚未完成" in step_result
+            )
+
+            if is_incomplete:
+                # 如果任务未完成，保存中间结果以供下次继续使用
+                logger.info(
+                    f"步骤 {self.current_step_index} 未完全完成，保持'进行中'状态，保存中间结果"
+                )
+                # 保存中间结果
+                self.step_intermediate_results[step_key] = step_result
+            else:
+                # 只有当任务真正完成时，才标记为已完成并清除中间结果
+                await self._mark_step_completed()
+                # 清除中间结果
+                if step_key in self.step_intermediate_results:
+                    del self.step_intermediate_results[step_key]
 
             return step_result
         except Exception as e:
@@ -437,55 +532,76 @@ class PlanningFlow(BaseFlow):
             logger.warning("无法标记步骤完成: 当前步骤索引为空")
             return
 
+        # 使用统一的方法更新步骤状态
+        await self._update_step_status(
+            self.current_step_index, PlanStepStatus.COMPLETED.value
+        )
+
+    async def _update_step_status(self, step_index: int, status: str) -> bool:
+        """统一更新步骤状态的方法，确保状态更新的一致性
+
+        先尝试通过planning_tool工具更新，如果失败则直接修改内存中的数据
+
+        Args:
+            step_index: 要更新的步骤索引
+            status: 新状态，应为PlanStepStatus的值之一
+
+        Returns:
+            更新是否成功
+        """
+        if step_index is None:
+            logger.warning("无法更新步骤状态: 步骤索引为空")
+            return False
+
+        # 记录状态变更信息
+        old_status = "unknown"
+        if self.active_plan_id in self.planning_tool.plans:
+            plan_data = self.planning_tool.plans[self.active_plan_id]
+            step_statuses = plan_data.get("step_statuses", [])
+            if step_index < len(step_statuses):
+                old_status = step_statuses[step_index]
+
+        # 只记录状态变化
+        if old_status != status:
+            logger.info(f"更新步骤 {step_index} 状态: {old_status} -> {status}")
+
+        # 首先尝试通过工具更新
         try:
-            # 获取当前步骤状态
-            if self.active_plan_id in self.planning_tool.plans:
-                plan_data = self.planning_tool.plans[self.active_plan_id]
-                step_statuses = plan_data.get("step_statuses", [])
-                current_status = (
-                    step_statuses[self.current_step_index]
-                    if self.current_step_index < len(step_statuses)
-                    else "unknown"
-                )
-                # 只有当状态不是已完成时才进行日志记录和标记操作
-                if current_status != PlanStepStatus.COMPLETED.value:
-                    # 简化日志，只记录步骤改变
-                    logger.info(
-                        f"标记步骤 {self.current_step_index}: {current_status} -> {PlanStepStatus.COMPLETED.value}"
-                    )
-
-                    # Mark the step as completed
-                    await self.planning_tool.execute(
-                        command="mark_step",
-                        plan_id=self.active_plan_id,
-                        step_index=self.current_step_index,
-                        step_status=PlanStepStatus.COMPLETED.value,
-                    )
-                else:
-                    logger.debug(
-                        f"步骤 {self.current_step_index} 已经是完成状态，无需重复标记"
-                    )
-            else:
-                logger.warning(f"找不到计划 {self.active_plan_id}，无法标记步骤状态")
-        except Exception as e:
-            error_msg = self.ERROR_MESSAGES["mark_step_error"].format(
-                step_index=self.current_step_index, error=str(e)
+            await self.planning_tool.execute(
+                command="mark_step",
+                plan_id=self.active_plan_id,
+                step_index=step_index,
+                step_status=status,
             )
-            logger.warning(error_msg, exc_info=True)
+            return True
+        except Exception as e:
+            logger.warning(f"通过工具更新步骤 {step_index} 状态失败: {e}")
 
-            # Update step status directly in planning tool storage
-            if self.active_plan_id in self.planning_tool.plans:
-                plan_data = self.planning_tool.plans[self.active_plan_id]
-                step_statuses = plan_data.get("step_statuses", [])
+            # 回退方案：直接更新内存中的数据
+            try:
+                if self.active_plan_id in self.planning_tool.plans:
+                    plan_data = self.planning_tool.plans[self.active_plan_id]
+                    step_statuses = plan_data.get("step_statuses", [])
 
-                # Ensure the step_statuses list is long enough
-                while len(step_statuses) <= self.current_step_index:
-                    step_statuses.append(PlanStepStatus.NOT_STARTED.value)
+                    # 确保step_statuses列表长度足够
+                    while len(step_statuses) <= step_index:
+                        step_statuses.append(PlanStepStatus.NOT_STARTED.value)
 
-                # Update the status
-                step_statuses[self.current_step_index] = PlanStepStatus.COMPLETED.value
-                plan_data["step_statuses"] = step_statuses
-                logger.info(f"已手动更新步骤 {self.current_step_index} 为已完成状态")
+                    # 更新状态
+                    step_statuses[step_index] = status
+                    plan_data["step_statuses"] = step_statuses
+                    logger.info(
+                        f"已通过直接修改数据的方式更新步骤 {step_index} 状态为 {status}"
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        f"无法更新步骤状态: 找不到计划 {self.active_plan_id}"
+                    )
+                    return False
+            except Exception as inner_e:
+                logger.error(f"直接更新步骤 {step_index} 状态也失败: {inner_e}")
+                return False
 
     async def _get_plan_text(self) -> str:
         """Get the current plan as formatted text."""
@@ -565,25 +681,38 @@ class PlanningFlow(BaseFlow):
                 plan_id=self.active_plan_id
             )
 
-    async def _finalize_plan(self) -> str:
+    async def _finalize_plan(self, step_results=None) -> str:
         """Finalize the plan and provide a summary using the flow's LLM directly."""
         plan_text = await self._get_plan_text()
+
+        # 准备步骤结果的详细信息
+        detailed_results = ""
+        if step_results:
+            detailed_results = "执行步骤详细结果:\n\n"
+            for step in step_results:
+                detailed_results += f"步骤 {step['step_index']}: {step['step_text']}\n"
+                detailed_results += f"结果: {step['result'][:200]}{'...' if len(step['result']) > 200 else ''}\n\n"
 
         # Create a summary using the flow's LLM directly
         try:
             system_message = Message.system_message(
-                "You are a planning assistant. Your task is to summarize the completed plan."
+                "你是一个任务规划助手。你的任务是总结已完成的计划，包括具体执行结果和成就。"
             )
 
             user_message = Message.user_message(
-                f"The plan has been completed. Here is the final plan status:\n\n{plan_text}\n\nPlease provide a summary of what was accomplished and any final thoughts."
+                f"计划已经完成。以下是最终计划状态和详细执行结果:\n\n最终计划状态:\n{plan_text}\n\n{detailed_results}\n\n"
+                f"请提供一个全面的总结，包括：\n"
+                f"1. 完成了哪些具体任务\n"
+                f"2. 执行过程中的关键成果和发现\n"
+                f"3. 任务最终的执行结果和成就\n"
+                f"4. 任何最终想法或建议"
             )
 
             response = await self.llm.ask(
                 messages=[user_message], system_msgs=[system_message]
             )
 
-            return f"Plan completed:\n\n{response}"
+            return f"计划总结:\n\n{response}"
         except Exception as e:
             logger.error(f"Error finalizing plan with LLM: {e}")
 
@@ -591,14 +720,21 @@ class PlanningFlow(BaseFlow):
             try:
                 agent = self.primary_agent
                 summary_prompt = f"""
-                The plan has been completed. Here is the final plan status:
+                计划已经完成。以下是最终计划状态和详细执行结果:
 
+                最终计划状态:
                 {plan_text}
 
-                Please provide a summary of what was accomplished and any final thoughts.
+                {detailed_results}
+
+                请提供一个全面的总结，包括：
+                1. 完成了哪些具体任务
+                2. 执行过程中的关键成果和发现
+                3. 任务最终的执行结果和成就
+                4. 任何最终想法或建议
                 """
                 summary = await agent.run(summary_prompt)
-                return f"Plan completed:\n\n{summary}"
+                return f"计划总结:\n\n{summary}"
             except Exception as e2:
                 logger.error(f"Error finalizing plan with agent: {e2}")
                 return self.ERROR_MESSAGES["finalize_error"]
