@@ -682,59 +682,73 @@ class PlanningFlow(BaseFlow):
             )
 
     async def _finalize_plan(self, step_results=None) -> str:
-        """Finalize the plan and provide a summary using the flow's LLM directly."""
-        plan_text = await self._get_plan_text()
+        """根据任务中工具的实际输出结果生成总结，专注于提取的信息和数据"""
 
-        # 准备步骤结果的详细信息
-        detailed_results = ""
+        # 提取所有工具的实际输出结果
+        tool_outputs = []
         if step_results:
-            detailed_results = "执行步骤详细结果:\n\n"
             for step in step_results:
-                detailed_results += f"步骤 {step['step_index']}: {step['step_text']}\n"
-                detailed_results += f"结果: {step['result'][:200]}{'...' if len(step['result']) > 200 else ''}\n\n"
+                result = step["result"]
+                # 尝试从结果中提取工具输出部分
+                if "Tool 'browser_use' completed its mission!" in result:
+                    # 提取工具实际输出的部分
+                    output_start = result.find("Observed output of cmd")
+                    if output_start != -1:
+                        tool_output = result[output_start:]
+                        tool_outputs.append(tool_output)
+                elif "Extracted from page:" in result:
+                    # 提取网页内容
+                    extraction_start = result.find("Extracted from page:")
+                    if extraction_start != -1:
+                        tool_outputs.append(result[extraction_start:])
+                # 添加其他可能的工具输出模式
+                elif "搜索结果:" in result or "Search results:" in result:
+                    tool_outputs.append(result)
 
-        # Create a summary using the flow's LLM directly
+        # 如果没有找到工具输出，返回一个简单的消息
+        if not tool_outputs:
+            return "未找到任务中的工具输出结果可供总结。"
+
+        # 将所有工具输出合并
+        combined_outputs = "\n\n".join(tool_outputs)
+
+        # 使用LLM总结工具输出的实际结果
         try:
             system_message = Message.system_message(
-                "你是一个任务规划助手。你的任务是总结已完成的计划，包括具体执行结果和成就。"
+                "你是一个数据分析专家。你的任务是总结各种工具输出的实际内容和信息，忽略任务执行过程，只关注获取到的事实和数据。"
             )
 
             user_message = Message.user_message(
-                f"计划已经完成。以下是最终计划状态和详细执行结果:\n\n最终计划状态:\n{plan_text}\n\n{detailed_results}\n\n"
-                f"请提供一个全面的总结，包括：\n"
-                f"1. 完成了哪些具体任务\n"
-                f"2. 执行过程中的关键成果和发现\n"
-                f"3. 任务最终的执行结果和成就\n"
-                f"4. 任何最终想法或建议"
+                f"以下是任务中各工具的实际输出结果:\n\n{combined_outputs}\n\n"
+                f"请根据这些工具输出结果提供一个简洁的信息总结，包括：\n"
+                f"1. 工具获取到的主要事实和数据\n"
+                f"2. 这些信息的关键点和价值\n"
+                f"不要描述工具如何执行或任务步骤，只总结获取到的实际信息内容。"
             )
 
             response = await self.llm.ask(
                 messages=[user_message], system_msgs=[system_message]
             )
 
-            return f"计划总结:\n\n{response}"
+            return f"信息结果总结:\n\n{response}"
         except Exception as e:
-            logger.error(f"Error finalizing plan with LLM: {e}")
+            logger.error(f"生成结果总结时出错: {e}")
 
-            # Fallback to using an agent for the summary
+            # 使用代理作为备选方案
             try:
                 agent = self.primary_agent
                 summary_prompt = f"""
-                计划已经完成。以下是最终计划状态和详细执行结果:
+                以下是任务中各工具的实际输出结果:
 
-                最终计划状态:
-                {plan_text}
+                {combined_outputs}
 
-                {detailed_results}
-
-                请提供一个全面的总结，包括：
-                1. 完成了哪些具体任务
-                2. 执行过程中的关键成果和发现
-                3. 任务最终的执行结果和成就
-                4. 任何最终想法或建议
+                请根据这些工具输出结果提供一个简洁的信息总结，包括：
+                1. 工具获取到的主要事实和数据
+                2. 这些信息的关键点和价值
+                不要描述工具如何执行或任务步骤，只总结获取到的实际信息内容。
                 """
                 summary = await agent.run(summary_prompt)
-                return f"计划总结:\n\n{summary}"
+                return f"信息结果总结:\n\n{summary}"
             except Exception as e2:
-                logger.error(f"Error finalizing plan with agent: {e2}")
+                logger.error(f"使用代理生成结果总结时出错: {e2}")
                 return self.ERROR_MESSAGES["finalize_error"]
