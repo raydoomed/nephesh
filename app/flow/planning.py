@@ -682,7 +682,13 @@ class PlanningFlow(BaseFlow):
             )
 
     async def _finalize_plan(self, step_results=None) -> str:
-        """根据任务中工具的实际输出结果生成总结，专注于提取的信息和数据"""
+        """根据用户需求和任务目的，对工具的实际输出结果进行有针对性的总结"""
+
+        # 获取计划数据和原始任务目的
+        plan_data = self.planning_tool.plans.get(self.active_plan_id, {})
+        plan_title = plan_data.get("title", "未命名任务")
+        # 提取任务描述/目的（通常在标题中包含）
+        task_purpose = plan_title.replace("Plan for: ", "").strip()
 
         # 提取所有工具的实际输出结果
         tool_outputs = []
@@ -707,30 +713,33 @@ class PlanningFlow(BaseFlow):
 
         # 如果没有找到工具输出，返回一个简单的消息
         if not tool_outputs:
-            return "未找到任务中的工具输出结果可供总结。"
+            return f"未找到任务中的工具输出结果可供总结。任务目的: {task_purpose}"
 
         # 将所有工具输出合并
         combined_outputs = "\n\n".join(tool_outputs)
 
-        # 使用LLM总结工具输出的实际结果
+        # 使用LLM总结工具输出的实际结果，并与用户需求关联
         try:
             system_message = Message.system_message(
-                "你是一个数据分析专家。你的任务是总结各种工具输出的实际内容和信息，忽略任务执行过程，只关注获取到的事实和数据。"
+                "你是一个专业的研究分析师。你的任务是根据用户的原始需求和目的，对收集到的信息进行有针对性的总结和分析。"
             )
 
             user_message = Message.user_message(
-                f"以下是任务中各工具的实际输出结果:\n\n{combined_outputs}\n\n"
-                f"请根据这些工具输出结果提供一个简洁的信息总结，包括：\n"
-                f"1. 工具获取到的主要事实和数据\n"
-                f"2. 这些信息的关键点和价值\n"
-                f"不要描述工具如何执行或任务步骤，只总结获取到的实际信息内容。"
+                f"用户的原始需求/任务目的: {task_purpose}\n\n"
+                f"以下是为满足该需求收集到的信息:\n\n{combined_outputs}\n\n"
+                f"请根据用户的原始需求，对这些信息进行有针对性的总结，包括：\n"
+                f"1. 这些信息如何回答或解决了用户的原始问题/需求\n"
+                f"2. 收集到的最重要的相关事实和数据\n"
+                f"3. 这些信息对用户的实际价值和意义\n"
+                f"4. 如果有，指出与用户需求相关但尚未得到满足的信息缺口\n\n"
+                f"请保持总结简洁明了，直接针对用户需求提供价值。不要描述工具执行过程。"
             )
 
             response = await self.llm.ask(
                 messages=[user_message], system_msgs=[system_message]
             )
 
-            return f"信息结果总结:\n\n{response}"
+            return f"任务结果分析:\n\n{response}"
         except Exception as e:
             logger.error(f"生成结果总结时出错: {e}")
 
@@ -738,17 +747,22 @@ class PlanningFlow(BaseFlow):
             try:
                 agent = self.primary_agent
                 summary_prompt = f"""
-                以下是任务中各工具的实际输出结果:
+                用户的原始需求/任务目的: {task_purpose}
+
+                以下是为满足该需求收集到的信息:
 
                 {combined_outputs}
 
-                请根据这些工具输出结果提供一个简洁的信息总结，包括：
-                1. 工具获取到的主要事实和数据
-                2. 这些信息的关键点和价值
-                不要描述工具如何执行或任务步骤，只总结获取到的实际信息内容。
+                请根据用户的原始需求，对这些信息进行有针对性的总结，包括：
+                1. 这些信息如何回答或解决了用户的原始问题/需求
+                2. 收集到的最重要的相关事实和数据
+                3. 这些信息对用户的实际价值和意义
+                4. 如果有，指出与用户需求相关但尚未得到满足的信息缺口
+
+                请保持总结简洁明了，直接针对用户需求提供价值。不要描述工具执行过程。
                 """
                 summary = await agent.run(summary_prompt)
-                return f"信息结果总结:\n\n{summary}"
+                return f"任务结果分析:\n\n{summary}"
             except Exception as e2:
                 logger.error(f"使用代理生成结果总结时出错: {e2}")
                 return self.ERROR_MESSAGES["finalize_error"]
