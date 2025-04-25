@@ -143,6 +143,13 @@ class BaseAgent(BaseModel, ABC):
         if request:
             self.update_memory("user", request)
 
+        # 检查是否需要执行记忆压缩，优化长对话
+        if hasattr(self.memory, "compress_memory") and len(
+            self.memory.messages
+        ) > getattr(self.memory, "compression_threshold", 20):
+            logger.info(f"Agent {self.name}: 执行记忆压缩，优化长对话处理")
+            self.memory.compress_memory()
+
         results: List[str] = []
         async with self.state_context(AgentState.RUNNING):
             while (
@@ -150,6 +157,20 @@ class BaseAgent(BaseModel, ABC):
             ):
                 self.current_step += 1
                 logger.info(f"Executing step {self.current_step}/{self.max_steps}")
+
+                # 执行记忆压缩，确保在步骤执行过程中长对话也能得到优化
+                memory_size = len(self.memory.messages)
+                if (
+                    hasattr(self.memory, "compress_memory")
+                    and memory_size > getattr(self.memory, "compression_threshold", 20)
+                    and memory_size
+                    > getattr(self.memory, "last_compression_size", 0) + 10
+                ):
+                    logger.info(
+                        f"Agent {self.name}: 步骤内执行记忆压缩，消息数量: {memory_size}"
+                    )
+                    self.memory.compress_memory()
+
                 step_result = await self.step()
 
                 # Check for stuck state
@@ -165,6 +186,12 @@ class BaseAgent(BaseModel, ABC):
                     self.current_step = 0
                     continuation_msg = f"已达到最大步数 {self.max_steps}，但任务尚未完成。任务将继续执行。"
                     self.update_memory("system", continuation_msg)
+
+                    # 在继续执行前执行一次记忆压缩，确保新阶段的执行有最优的上下文
+                    if hasattr(self.memory, "compress_memory"):
+                        logger.info(f"Agent {self.name}: 继续模式下执行记忆压缩")
+                        self.memory.compress_memory()
+
                     logger.warning(
                         f"Agent {self.name} reached max_steps limit of {self.max_steps}. Continuing task execution."
                     )

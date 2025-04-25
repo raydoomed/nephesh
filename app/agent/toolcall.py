@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
@@ -35,16 +35,69 @@ class ToolCallAgent(ReActAgent):
     max_steps: int = 30
     max_observe: Optional[Union[int, bool]] = None
 
+    # 添加工具使用历史和性能跟踪
+    tool_usage_history: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
+    tool_success_rates: Dict[str, float] = Field(default_factory=dict)
+
     async def think(self) -> bool:
         """Process current state and decide next actions using tools"""
         if self.next_step_prompt:
             user_msg = Message.user_message(self.next_step_prompt)
             self.messages += [user_msg]
 
+        # 检查是否需要使用压缩后的记忆
+        messages_for_llm = self.messages
+
+        # 如果支持记忆摘要功能，使用带摘要的消息列表
+        if hasattr(self.memory, "get_memory_with_summaries") and self.memory.summaries:
+            # 获取带摘要的消息，但需要额外处理确保工具调用的正确关联
+            try:
+                all_messages = self.memory.get_memory_with_summaries()
+
+                # 确保工具调用和工具响应的关联关系正确
+                # 检查是否存在没有对应assistant tool_calls的tool消息
+                messages_for_llm = []
+                tool_call_ids = set()
+                assistant_indices = {}
+
+                # 第一遍：收集所有工具调用ID和assistant消息位置
+                for i, msg in enumerate(all_messages):
+                    if msg.role == "assistant" and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            tool_call_ids.add(tc.id)
+                            assistant_indices[tc.id] = i
+
+                # 第二遍：确保只包含有对应工具调用的工具响应
+                for i, msg in enumerate(all_messages):
+                    if msg.role == "tool" and msg.tool_call_id:
+                        # 只保留有对应assistant消息的tool消息
+                        if msg.tool_call_id in tool_call_ids:
+                            # 确保assistant消息在工具消息之前
+                            if (
+                                msg.tool_call_id in assistant_indices
+                                and assistant_indices[msg.tool_call_id] < i
+                            ):
+                                messages_for_llm.append(msg)
+                        else:
+                            # 工具消息没有对应的工具调用，转换为assistant消息
+                            content = f"工具 '{msg.name}' 执行结果: {msg.content}"
+                            messages_for_llm.append(Message.assistant_message(content))
+                    else:
+                        # 非工具消息直接添加
+                        messages_for_llm.append(msg)
+
+                logger.info(
+                    f"🧠 {self.name} 使用记忆压缩和摘要功能，消息数量: {len(messages_for_llm)}，包含摘要数量: {len(self.memory.summaries)}"
+                )
+            except Exception as e:
+                # 如果处理失败，退回到使用原始消息
+                logger.error(f"处理记忆摘要时出错: {e}，退回到使用原始消息")
+                messages_for_llm = self.messages
+
         try:
-            # Get response with tool options
+            # Get response with tool options using optimized memory context
             response = await self.llm.ask_tool(
-                messages=self.messages,
+                messages=messages_for_llm,
                 system_msgs=(
                     [Message.system_message(self.system_prompt)]
                     if self.system_prompt
@@ -62,14 +115,61 @@ class ToolCallAgent(ReActAgent):
                 logger.error(
                     f"🚨 Token limit error (from RetryError): {token_limit_error}"
                 )
-                self.memory.add_message(
-                    Message.assistant_message(
-                        f"Maximum token limit reached, cannot continue execution: {str(token_limit_error)}"
+
+                # 尝试进行更激进的记忆压缩和摘要以减少token
+                if hasattr(self.memory, "compress_memory"):
+                    logger.warning(
+                        f"🔄 {self.name} 执行紧急记忆压缩以处理token超限问题"
                     )
-                )
-                self.state = AgentState.FINISHED
-                return False
-            raise
+                    # 保存原来的压缩比例
+                    original_ratio = getattr(self.memory, "compression_ratio", 0.5)
+                    # 设置更激进的压缩比例
+                    self.memory.compression_ratio = 0.3
+                    self.memory.compress_memory()
+                    # 恢复原来的压缩比例
+                    self.memory.compression_ratio = original_ratio
+
+                    # 使用压缩后的记忆重试一次
+                    try:
+                        messages_for_llm = self.memory.get_memory_with_summaries()
+                        logger.info(
+                            f"🔄 紧急压缩后重试，消息数量: {len(messages_for_llm)}"
+                        )
+
+                        response = await self.llm.ask_tool(
+                            messages=messages_for_llm,
+                            system_msgs=(
+                                [Message.system_message(self.system_prompt)]
+                                if self.system_prompt
+                                else None
+                            ),
+                            tools=self.available_tools.to_params(),
+                            tool_choice=self.tool_choices,
+                        )
+                        # 如果成功，继续正常执行
+                        logger.info(f"✅ {self.name} 紧急压缩记忆后成功恢复执行")
+                    except Exception as retry_error:
+                        # 如果重试也失败，记录错误并终止
+                        logger.error(f"🚨 紧急记忆压缩后仍然失败: {retry_error}")
+                        self.memory.add_message(
+                            Message.assistant_message(
+                                f"即使进行记忆压缩后，仍然超出了token限制，无法继续执行: {str(token_limit_error)}"
+                            )
+                        )
+                        self.state = AgentState.FINISHED
+                        return False
+                else:
+                    # 如果没有压缩功能，按原来逻辑处理
+                    self.memory.add_message(
+                        Message.assistant_message(
+                            f"Maximum token limit reached, cannot continue execution: {str(token_limit_error)}"
+                        )
+                    )
+                    self.state = AgentState.FINISHED
+                    return False
+            else:
+                # 其他类型的错误直接抛出
+                raise
 
         self.tool_calls = tool_calls = (
             response.tool_calls if response and response.tool_calls else []
@@ -127,6 +227,66 @@ class ToolCallAgent(ReActAgent):
             )
             return False
 
+    async def optimize_tool_selection(self) -> None:
+        """优化工具选择策略，分析历史工具使用情况并可能调整工具选择策略
+
+        此方法实现了智能工具选择优化，通过以下策略提升效率：
+        1. 分析工具使用历史和成功率
+        2. 识别工具使用模式
+        3. 根据当前任务上下文调整工具优先级
+        4. 过滤或替换低效工具
+        """
+        if not self.tool_calls:
+            return
+
+        # 当前任务上下文分析
+        recent_messages = self.memory.messages[-5:] if self.memory.messages else []
+        current_context = " ".join(
+            [msg.content or "" for msg in recent_messages if msg.content]
+        )
+
+        # 分析当前选择的工具是否适合当前任务
+        for i, tool_call in enumerate(self.tool_calls):
+            tool_name = tool_call.function.name
+
+            # 更新工具使用历史
+            if tool_name not in self.tool_usage_history:
+                self.tool_usage_history[tool_name] = []
+
+            # 记录本次使用
+            self.tool_usage_history[tool_name].append(
+                {
+                    "arguments": tool_call.function.arguments,
+                    "context": current_context[:200],  # 只保存上下文的前200个字符
+                    "step": self.current_step,
+                    "timestamp": asyncio.get_event_loop().time(),
+                    "success": None,  # 将在执行后更新
+                }
+            )
+
+            # 检查此工具的历史成功率
+            if (
+                tool_name in self.tool_success_rates
+                and self.tool_success_rates[tool_name] < 0.3
+            ):
+                # 如果工具历史成功率低于30%，考虑替换为更可靠的工具
+                logger.warning(
+                    f"🔄 Tool '{tool_name}' has low success rate ({self.tool_success_rates[tool_name]:.2f}), considering alternatives"
+                )
+
+                # 这里可以实现工具替换逻辑，但需要谨慎，避免过度干预模型决策
+                # 目前只记录警告，不进行实际替换
+
+            # 如果是特殊工具，确保其位置适当（通常应该最后执行）
+            if self._is_special_tool(tool_name) and i < len(self.tool_calls) - 1:
+                # 将特殊工具移到末尾
+                logger.info(
+                    f"🔀 Reordering: moving special tool '{tool_name}' to the end of execution queue"
+                )
+                self.tool_calls.append(self.tool_calls.pop(i))
+                # 由于修改了tool_calls，需要重新开始循环
+                break
+
     async def act(self) -> str:
         """Execute tool calls and handle their results"""
         if not self.tool_calls:
@@ -136,29 +296,97 @@ class ToolCallAgent(ReActAgent):
             # Return last message content if no tool calls
             return self.messages[-1].content or "No content or commands to execute"
 
+        # 优化工具选择策略
+        await self.optimize_tool_selection()
+
         results = []
         for command in self.tool_calls:
             # Reset base64_image for each tool call
             self._current_base64_image = None
 
-            result = await self.execute_tool(command)
+            # 记录开始时间，用于性能分析
+            start_time = asyncio.get_event_loop().time()
+            success = True  # 默认假设成功
 
-            if self.max_observe:
-                result = result[: self.max_observe]
+            try:
+                result = await self.execute_tool(command)
 
-            logger.info(
-                f"🎯 Tool '{command.function.name}' completed its mission! Result: {result}"
-            )
+                if self.max_observe:
+                    result = result[: self.max_observe]
 
-            # Add tool response to memory
-            tool_msg = Message.tool_message(
-                content=result,
-                tool_call_id=command.id,
-                name=command.function.name,
-                base64_image=self._current_base64_image,
-            )
-            self.memory.add_message(tool_msg)
-            results.append(result)
+                logger.info(
+                    f"🎯 Tool '{command.function.name}' completed its mission! Result: {result}"
+                )
+
+                # 找到工具调用的原始消息 (assistant消息，带有tool_calls)
+                assistant_msg_with_tool_calls = None
+                for i in range(len(self.memory.messages) - 1, -1, -1):
+                    msg = self.memory.messages[i]
+                    if (
+                        msg.role == "assistant"
+                        and msg.tool_calls
+                        and any(tc.id == command.id for tc in msg.tool_calls)
+                    ):
+                        assistant_msg_with_tool_calls = msg
+                        break
+
+                # 确保找到了工具调用的原始消息
+                if assistant_msg_with_tool_calls:
+                    # Add tool response to memory
+                    tool_msg = Message.tool_message(
+                        content=result,
+                        tool_call_id=command.id,
+                        name=command.function.name,
+                        base64_image=self._current_base64_image,
+                    )
+                    self.memory.add_message(tool_msg)
+                    results.append(result)
+                else:
+                    # 找不到对应的工具调用消息，使用普通消息
+                    logger.warning(
+                        f"找不到匹配的工具调用消息 ID {command.id}，使用普通消息"
+                    )
+                    self.memory.add_message(
+                        Message.assistant_message(
+                            f"工具 '{command.function.name}' 执行结果: {result}"
+                        )
+                    )
+                    results.append(result)
+
+            except Exception as e:
+                # 工具执行失败
+                success = False
+                error_msg = (
+                    f"⚠️ Tool '{command.function.name}' execution failed: {str(e)}"
+                )
+                logger.error(error_msg)
+                self.memory.add_message(Message.assistant_message(error_msg))
+                results.append(f"Error: {error_msg}")
+            finally:
+                # 完成工具执行后，更新工具使用历史
+                tool_name = command.function.name
+                if (
+                    tool_name in self.tool_usage_history
+                    and self.tool_usage_history[tool_name]
+                ):
+                    # 更新最近一次使用记录
+                    self.tool_usage_history[tool_name][-1].update(
+                        {
+                            "success": success,
+                            "duration": asyncio.get_event_loop().time() - start_time,
+                        }
+                    )
+
+                    # 更新工具成功率
+                    successes = sum(
+                        1
+                        for record in self.tool_usage_history[tool_name]
+                        if record["success"]
+                    )
+                    total = len(self.tool_usage_history[tool_name])
+                    self.tool_success_rates[tool_name] = (
+                        successes / total if total > 0 else 0.0
+                    )
 
         return "\n\n".join(results)
 
@@ -277,7 +505,7 @@ class ToolCallAgent(ReActAgent):
                             terminate_tool = self.available_tools.get_tool("terminate")
                             if terminate_tool:
                                 tool_result = await terminate_tool.execute(
-                                    {"status": "force_complete"}
+                                    status="force_complete"
                                 )
                                 logger.info(f"强制调用终止工具完成任务: {tool_result}")
 
