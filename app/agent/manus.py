@@ -181,6 +181,9 @@ class Manus(ToolCallAgent):
         # 清空工具使用统计
         self.tool_usage_stats = {}
 
+        # 重置当前步骤计数器
+        self.current_step = 0
+
         # 保存原始输入，用于后续评估
         original_task = input_text
 
@@ -193,69 +196,7 @@ class Manus(ToolCallAgent):
             return result
 
         # 检查是否需要进行记忆压缩和智能摘要
-        # 对于新任务，只有在记忆中已经有大量历史对话时才进行压缩
-        if (
-            hasattr(self.memory, "compress_memory")
-            and len(self.memory.messages)
-            > getattr(self.memory, "compression_threshold", 20) * 1.5
-        ):
-
-            logger.info(
-                f"Manus: 新任务开始前优化历史记忆，当前消息数: {len(self.memory.messages)}"
-            )
-
-            # 新任务开始前，如果有足够的历史记忆，使用LLM生成更高质量的摘要
-            if self.use_llm_summary and hasattr(self.memory, "generate_llm_summary"):
-                # 只对较旧的消息生成摘要，保留最新的一部分对话作为上下文
-                to_summarize = (
-                    self.memory.messages[:-15] if len(self.memory.messages) > 20 else []
-                )
-
-                if to_summarize:
-                    # 使用LLM生成智能摘要
-                    summary_text = await self.generate_intelligent_summary(to_summarize)
-
-                    # 临时调整压缩参数
-                    original_ratio = self.memory.compression_ratio
-                    original_threshold = self.memory.compression_threshold
-
-                    self.memory.compression_ratio = (
-                        0.3  # 更激进的压缩，只保留30%的最新消息
-                    )
-                    self.memory.compression_threshold = 0  # 确保一定执行压缩
-
-                    # 手动设置摘要内容
-                    if len(to_summarize) > 0:
-                        import time
-
-                        self.memory.summaries.append(
-                            {
-                                "start_idx": 0,
-                                "end_idx": len(to_summarize) - 1,
-                                "content": summary_text,
-                                "timestamp": time.time(),
-                            }
-                        )
-
-                        # 更新消息列表，保留系统消息和最新消息
-                        system_messages = [
-                            msg for msg in to_summarize if msg.role == "system"
-                        ]
-                        self.memory.messages = (
-                            system_messages + self.memory.messages[-15:]
-                        )
-                        self.memory.last_compression_size = len(self.memory.messages)
-
-                    # 恢复原始参数
-                    self.memory.compression_ratio = original_ratio
-                    self.memory.compression_threshold = original_threshold
-
-                    logger.info(
-                        f"Manus: 新任务开始前完成智能记忆压缩，保留消息数: {len(self.memory.messages)}"
-                    )
-            else:
-                # 使用默认压缩
-                self.memory.compress_memory()
+        await self._handle_memory_compression("新任务开始前")
 
         # 创建规划流程并执行
         logger.info(f"Manus: 为任务创建执行计划 - {input_text[:50]}...")
@@ -351,46 +292,54 @@ class Manus(ToolCallAgent):
             logger.info(f"Manus: 使用LLM生成智能摘要，处理消息数: {len(messages)}")
             response = await self.llm.ask([system_msg, user_msg])
 
-            # 处理LLM返回结果，支持字符串和对象两种可能的返回类型
-            response_content = ""
+            # 处理LLM返回结果
             if response is None:
                 logger.warning("Manus: LLM摘要生成失败，返回None，回退到简单摘要")
                 return self._generate_simple_summary(messages)
-            elif isinstance(response, str):
-                # 直接使用字符串
+
+            response_content = ""
+
+            # 处理不同类型的响应
+            if isinstance(response, str):
                 response_content = response
             elif hasattr(response, "content"):
-                # 对象有content属性
                 content = response.content
-                # 检查content类型
-                if isinstance(content, list):
-                    response_content = "\n".join(content)
+                if isinstance(content, str):
+                    response_content = content
+                elif isinstance(content, list):
+                    # 列表形式，可能是多个消息段落
+                    response_content = "\n".join(
+                        [str(item) for item in content if item]
+                    )
                 elif isinstance(content, dict):
-                    # 如果是字典，转换为JSON字符串
-                    try:
-                        import json
+                    # 字典形式，尝试JSON序列化
+                    import json
 
+                    try:
                         response_content = json.dumps(
                             content, ensure_ascii=False, indent=2
                         )
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Manus: JSON序列化响应失败: {e}")
                         response_content = str(content)
                 else:
-                    response_content = content
+                    # 其他类型，直接转字符串
+                    response_content = str(content)
             else:
-                # 尝试转换为字符串
+                # 其他响应类型，尝试直接转字符串
                 try:
                     response_content = str(response)
-                except:
-                    logger.warning("Manus: 无法解析LLM摘要响应，回退到简单摘要")
+                except Exception as e:
+                    logger.warning(f"Manus: 无法解析LLM摘要响应: {e}")
                     return self._generate_simple_summary(messages)
 
-            if response_content:
-                logger.info(f"Manus: 成功生成智能摘要: {response_content[:100]}...")
-                return response_content
+            if not response_content or not response_content.strip():
+                logger.warning("Manus: LLM返回了空摘要，回退到简单摘要")
+                return self._generate_simple_summary(messages)
 
-            logger.warning("Manus: LLM摘要生成失败，回退到简单摘要")
-            return self._generate_simple_summary(messages)
+            logger.info(f"Manus: 成功生成智能摘要: {response_content[:100]}...")
+            return response_content
+
         except Exception as e:
             logger.error(f"Manus: 生成LLM摘要出错: {e}")
             return self._generate_simple_summary(messages)
@@ -440,98 +389,30 @@ class Manus(ToolCallAgent):
         """
         # 设置执行状态和上下文
         self.is_executing_planned_task = True
-
-        # 重置步骤计数器，确保每个计划步骤有独立的步数限制
-        self.current_step = 0
-        self.steps_since_last_summary += 1
-
-        # 保存当前规划流程和步骤索引，以便think方法使用
-        if planning_flow:
-            self.planning_flow = planning_flow
-
-        # 检查是否需要进行记忆压缩和智能摘要
-        if hasattr(self.memory, "compress_memory") and len(
-            self.memory.messages
-        ) > getattr(self.memory, "compression_threshold", 20):
-
-            logger.info(
-                f"Manus: 步骤执行前优化记忆，当前消息数: {len(self.memory.messages)}"
-            )
-
-            # 如果开启智能摘要且已经执行了足够的步骤，使用LLM生成摘要
-            if (
-                self.use_llm_summary
-                and self.steps_since_last_summary >= self.summarize_after_steps
-                and hasattr(self.memory, "generate_llm_summary")
-            ):
-
-                # 要摘要的消息范围，排除最新的几条
-                to_summarize = (
-                    self.memory.messages[:-10] if len(self.memory.messages) > 10 else []
-                )
-
-                if to_summarize:
-                    logger.info(
-                        f"Manus: 触发智能摘要生成，处理消息数: {len(to_summarize)}"
-                    )
-
-                    # 使用Manus的摘要方法生成
-                    summary_text = await self.generate_intelligent_summary(to_summarize)
-
-                    # 设置到Memory中
-                    original_ratio = self.memory.compression_ratio
-                    self.memory.compression_ratio = 0.4  # 更激进的压缩比例
-
-                    # 保存当前压缩阈值
-                    compression_threshold = self.memory.compression_threshold
-                    # 临时降低压缩阈值，确保一定执行压缩
-                    self.memory.compression_threshold = 0
-
-                    # 手动设置摘要内容
-                    if len(to_summarize) > 0:
-                        import time
-
-                        self.memory.summaries.append(
-                            {
-                                "start_idx": 0,
-                                "end_idx": len(to_summarize) - 1,
-                                "content": summary_text,
-                                "timestamp": time.time(),
-                            }
-                        )
-
-                        # 更新消息列表，保留系统消息和最新消息
-                        system_messages = [
-                            msg for msg in to_summarize if msg.role == "system"
-                        ]
-                        self.memory.messages = (
-                            system_messages + self.memory.messages[-10:]
-                        )
-                        self.memory.last_compression_size = len(self.memory.messages)
-
-                    # 恢复原始压缩比例和阈值
-                    self.memory.compression_ratio = original_ratio
-                    self.memory.compression_threshold = compression_threshold
-
-                    # 重置步骤计数
-                    self.steps_since_last_summary = 0
-
-                    logger.info(
-                        f"Manus: 智能记忆压缩完成，保留消息数: {len(self.memory.messages)}"
-                    )
-            else:
-                # 使用常规压缩
-                self.memory.compress_memory()
-
-        # 添加步骤限制提示，使用模板
-        step_prompt = self.STEP_LIMIT_TEMPLATE.format(
-            prompt=step_prompt, max_steps=self.max_steps
-        )
-
-        # 记录正在执行的步骤
-        logger.info(f"Manus: 执行计划步骤 {current_step_index} - {step_prompt[:50]}...")
+        original_step_count = self.current_step
 
         try:
+            # 重置步骤计数器，确保每个计划步骤有独立的步数限制
+            self.current_step = 0
+            self.steps_since_last_summary += 1
+
+            # 保存当前规划流程和步骤索引，以便think方法使用
+            if planning_flow:
+                self.planning_flow = planning_flow
+
+            # 检查是否需要进行记忆压缩和智能摘要
+            await self._handle_memory_compression("步骤执行前")
+
+            # 添加步骤限制提示，使用模板
+            step_prompt = self.STEP_LIMIT_TEMPLATE.format(
+                prompt=step_prompt, max_steps=self.max_steps
+            )
+
+            # 记录正在执行的步骤
+            logger.info(
+                f"Manus: 执行计划步骤 {current_step_index} - {step_prompt[:50]}..."
+            )
+
             # 检查是否启用了子任务评估
             if (
                 not self.subtask_evaluation_enabled
@@ -793,6 +674,15 @@ class Manus(ToolCallAgent):
             # 返回最终结果
             return current_result
         finally:
+            # 记录子步骤执行的总步数
+            total_steps = original_step_count + self.current_step
+            logger.info(
+                f"Manus: 计划步骤 {current_step_index} 总共执行了 {self.current_step} 个内部步骤"
+            )
+
+            # 恢复原始步骤计数并累加当前步骤的计数
+            self.current_step = total_steps
+
             self.is_executing_planned_task = False
             logger.debug(f"Manus: 完成计划步骤 {current_step_index}")  # 降低日志级别
 
@@ -825,17 +715,14 @@ class Manus(ToolCallAgent):
                     current_step = self.planning_flow.current_step_index
 
                     # 创建规划上下文提示
-                    planning_context = f"""
-                    您正在执行一个任务计划中的第 {current_step} 步。
-
-                    当前计划状态:
-                    {plan_status}
-
-                    请考虑当前任务计划的上下文，选择最适合完成当前步骤的行动。
-                    只专注于完成当前步骤，不要尝试执行后续步骤。
-                    如果您认为任务已经实质性完成，可以使用terminate工具提前结束任务，而不必执行剩余步骤。
-                    完成当前步骤后，系统会自动为您安排下一个步骤。
-                    """
+                    planning_context = (
+                        f"您正在执行一个任务计划中的第 {current_step} 步。\n\n"
+                        f"当前计划状态:\n{plan_status}\n\n"
+                        f"请考虑当前任务计划的上下文，选择最适合完成当前步骤的行动。\n"
+                        f"只专注于完成当前步骤，不要尝试执行后续步骤。\n"
+                        f"如果您认为任务已经实质性完成，可以使用terminate工具提前结束任务，而不必执行剩余步骤。\n"
+                        f"完成当前步骤后，系统会自动为您安排下一个步骤。"
+                    )
 
                     # 将规划上下文添加到系统提示
                     self.system_prompt = (
@@ -888,38 +775,152 @@ class Manus(ToolCallAgent):
 
     async def cleanup(self):
         """Clean up Manus agent resources."""
-        # 记录记忆统计信息
-        if hasattr(self.memory, "summaries"):
-            summary_count = len(self.memory.summaries)
-            message_count = len(self.memory.messages)
-            compression_ratio = getattr(self.memory, "compression_ratio", 0.5)
+        try:
+            # 记录记忆统计信息
+            if hasattr(self.memory, "summaries"):
+                summary_count = len(self.memory.summaries)
+                message_count = len(self.memory.messages)
+                compression_ratio = getattr(self.memory, "compression_ratio", 0.5)
 
-            logger.info(
-                f"Manus: 记忆统计 - 消息数: {message_count}, "
-                f"摘要数: {summary_count}, 压缩比例: {compression_ratio}"
+                logger.info(
+                    f"Manus: 记忆统计 - 消息数: {message_count}, "
+                    f"摘要数: {summary_count}, 压缩比例: {compression_ratio}"
+                )
+
+                if summary_count > 0:
+                    try:
+                        # 记录最新摘要
+                        latest_summary = self.memory.summaries[-1]["content"]
+                        summary_preview = (
+                            latest_summary[:100] + "..."
+                            if len(latest_summary) > 100
+                            else latest_summary
+                        )
+                        logger.info(f"Manus: 最新记忆摘要: {summary_preview}")
+                    except Exception as e:
+                        logger.warning(f"Manus: 无法获取最新摘要信息: {e}")
+
+            # 记录自我评估统计信息
+            if self.evaluator and hasattr(self.evaluator, "evaluation_history"):
+                try:
+                    eval_count = len(self.evaluator.evaluation_history)
+                    if eval_count > 0:
+                        avg_score = self.evaluator.get_average_score()
+                        logger.info(
+                            f"Manus: 评估统计 - 评估次数: {eval_count}, 平均评分: {avg_score:.2f}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Manus: 无法获取评估统计信息: {e}")
+
+            # 清理浏览器资源
+            if self.browser_context_helper:
+                try:
+                    await self.browser_context_helper.cleanup_browser()
+                except Exception as e:
+                    logger.warning(f"Manus: 清理浏览器资源失败: {e}")
+
+            logger.info("Manus: 资源清理完成")
+        except Exception as e:
+            logger.error(f"Manus: 资源清理过程中出错: {e}")
+
+    async def _handle_memory_compression(self, context_name: str = ""):
+        """处理记忆压缩和智能摘要的通用方法
+
+        Args:
+            context_name: 调用上下文名称，用于日志
+
+        Returns:
+            None
+        """
+        # 检查是否需要进行记忆压缩
+        if not hasattr(self.memory, "compress_memory") or len(
+            self.memory.messages
+        ) <= getattr(self.memory, "compression_threshold", 20):
+            return
+
+        logger.info(
+            f"Manus: {context_name}优化记忆，当前消息数: {len(self.memory.messages)}"
+        )
+
+        # 如果开启智能摘要且已经执行了足够的步骤，使用LLM生成摘要
+        if (
+            self.use_llm_summary
+            and self.steps_since_last_summary >= self.summarize_after_steps
+            and hasattr(self.memory, "generate_llm_summary")
+        ):
+
+            # 要摘要的消息范围，排除最新的几条
+            to_summarize = (
+                self.memory.messages[:-10] if len(self.memory.messages) > 10 else []
             )
 
-            if summary_count > 0:
-                # 记录最新摘要
-                latest_summary = self.memory.summaries[-1]["content"]
-                summary_preview = (
-                    latest_summary[:100] + "..."
-                    if len(latest_summary) > 100
-                    else latest_summary
-                )
-                logger.info(f"Manus: 最新记忆摘要: {summary_preview}")
+            if to_summarize:
+                logger.info(f"Manus: 触发智能摘要生成，处理消息数: {len(to_summarize)}")
 
-        # 记录自我评估统计信息
-        if self.evaluator and hasattr(self.evaluator, "evaluation_history"):
-            eval_count = len(self.evaluator.evaluation_history)
-            if eval_count > 0:
-                avg_score = self.evaluator.get_average_score()
+                # 使用Manus的摘要方法生成
+                summary_text = await self.generate_intelligent_summary(to_summarize)
+
+                # 设置到Memory中
+                original_ratio = self.memory.compression_ratio
+                self.memory.compression_ratio = 0.4  # 更激进的压缩比例
+
+                # 保存当前压缩阈值
+                compression_threshold = self.memory.compression_threshold
+                # 临时降低压缩阈值，确保一定执行压缩
+                self.memory.compression_threshold = 0
+
+                # 手动设置摘要内容
+                if len(to_summarize) > 0:
+                    import time
+
+                    self.memory.summaries.append(
+                        {
+                            "start_idx": 0,
+                            "end_idx": len(to_summarize) - 1,
+                            "content": summary_text,
+                            "timestamp": time.time(),
+                        }
+                    )
+
+                    # 更新消息列表，保留系统消息和最新消息
+                    system_messages = [
+                        msg for msg in to_summarize if msg.role == "system"
+                    ]
+                    self.memory.messages = system_messages + self.memory.messages[-10:]
+                    self.memory.last_compression_size = len(self.memory.messages)
+
+                # 恢复原始压缩比例和阈值
+                self.memory.compression_ratio = original_ratio
+                self.memory.compression_threshold = compression_threshold
+
+                # 重置步骤计数
+                self.steps_since_last_summary = 0
+
                 logger.info(
-                    f"Manus: 评估统计 - 评估次数: {eval_count}, 平均评分: {avg_score:.2f}"
+                    f"Manus: 智能记忆压缩完成，保留消息数: {len(self.memory.messages)}"
                 )
+        else:
+            # 使用常规压缩
+            self.memory.compress_memory()
 
-        # 清理浏览器资源
-        if self.browser_context_helper:
-            await self.browser_context_helper.cleanup_browser()
+    def update_memory(self, role: str, content: str):
+        """向代理记忆中添加新消息
 
-        logger.info("Manus: 资源清理完成")
+        Args:
+            role: 消息角色，如'system', 'user', 'assistant'
+            content: 消息内容
+
+        Returns:
+            None
+        """
+        if hasattr(self.memory, "add_message") and callable(self.memory.add_message):
+            if role == "system":
+                self.memory.add_message(Message.system_message(content))
+            elif role == "user":
+                self.memory.add_message(Message.user_message(content))
+            elif role == "assistant":
+                self.memory.add_message(Message.assistant_message(content))
+            else:
+                logger.warning(f"Manus: 未知角色类型 '{role}'，无法添加到记忆")
+        else:
+            logger.warning(f"Manus: 记忆对象不支持add_message方法，无法添加消息")
