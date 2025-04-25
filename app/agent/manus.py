@@ -61,7 +61,7 @@ class Manus(ToolCallAgent):
     subtask_quality_threshold: float = Field(
         default=8, description="子任务质量阈值，高于此值才算通过"
     )
-    subtask_max_retries: int = Field(default=1, description="子任务最大重试次数")
+    subtask_max_retries: int = Field(default=0, description="子任务最大重试次数")
     max_improvement_iterations: int = Field(
         default=1, description="最大自动改进迭代次数"
     )
@@ -555,20 +555,137 @@ class Manus(ToolCallAgent):
             quality_threshold = self.subtask_quality_threshold
             max_retries = self.subtask_max_retries
 
-            while retry_count <= max_retries:  # 注意这里是<=，因为第一次执行也算一次
-                # 使用原始run方法执行步骤，允许使用多个工具调用
-                if retry_count == 0:
-                    # 首次执行
-                    result = await super().run(step_prompt)
-                    logger.info(f"Manus: 步骤 {current_step_index} 首次执行完成")
-                else:
-                    # 重试执行，使用改进计划或重试模板
+            # 首次执行
+            result = await super().run(step_prompt)
+            logger.info(f"Manus: 步骤 {current_step_index} 首次执行完成")
+            current_result = result
+
+            # 评估当前子任务结果
+            evaluation = await self.evaluator.evaluate_task(
+                original_task=step_prompt,
+                task_output=result,
+                step_count=self.current_step,
+                tools_used=self.tool_usage_stats,
+            )
+
+            # 打印评估结果
+            logger.info(f"Manus: 子任务评估分数: {evaluation.score}/10")
+
+            # 使用安全的方式检查task_complete属性
+            task_complete = False
+            if hasattr(evaluation, "metadata"):
+                task_complete = evaluation.metadata.get("task_complete", False)
+
+            # 如果质量已达标，直接返回结果
+            if evaluation.score >= quality_threshold:
+                logger.info(f"Manus: 子任务质量达标，继续下一步骤")
+
+                # 添加系统消息，表示质量达标
+                self.update_memory(
+                    "system",
+                    f"子任务质量评估: {evaluation.score}/10，已达到标准 {quality_threshold}。",
+                )
+
+                # 安全检查task_complete
+                if task_complete:
+                    self.update_memory(
+                        "system",
+                        "任务已实质完成，考虑使用terminate工具提前结束剩余步骤。",
+                    )
+
+                return current_result
+
+            # 质量未达标，尝试进行一次基本改进（无论max_retries设置如何）
+            if self.optimizer and self.enable_auto_improvement:
+                logger.info(f"Manus: 尝试使用优化器为子任务生成改进计划...")
+                max_iterations = self.max_improvement_iterations
+
+                # 生成改进计划
+                if improvement_plan is None and max_iterations > 0:
+                    improvement_plan = await self.optimizer.create_improvement_plan(
+                        evaluation=evaluation,
+                        original_task=step_prompt,
+                        task_output=result,
+                    )
+
                     if improvement_plan:
-                        # 使用生成的改进计划作为新的执行指令
-                        logger.info(
-                            f"Manus: 步骤 {current_step_index} 使用改进计划重试"
+                        logger.info(f"Manus: 成功生成子任务改进计划")
+
+                        # 添加系统消息，包含改进计划
+                        self.update_memory(
+                            "system",
+                            (
+                                f"子任务改进计划:\n{improvement_plan[:500]}..."
+                                if len(improvement_plan) > 500
+                                else improvement_plan
+                            ),
                         )
+
+                        # 使用改进计划执行一次改进（无论max_retries如何）
                         retry_prompt = f"""
+根据执行的评估结果，需要改进当前步骤的质量，请按照以下改进计划执行：
+
+{improvement_plan}
+
+原始任务:
+{step_prompt}
+
+请务必按照改进计划提高质量。
+"""
+                        result = await super().run(retry_prompt)
+                        current_result = result
+
+                        # 再次评估改进后的结果
+                        evaluation = await self.evaluator.evaluate_task(
+                            original_task=step_prompt,
+                            task_output=result,
+                            step_count=self.current_step,
+                            tools_used=self.tool_usage_stats,
+                        )
+
+                        logger.info(
+                            f"Manus: 改进后子任务评估分数: {evaluation.score}/10"
+                        )
+
+                        # 如果改进后质量达标，返回结果
+                        if evaluation.score >= quality_threshold:
+                            logger.info(f"Manus: 改进后子任务质量达标，继续下一步骤")
+                            self.update_memory(
+                                "system",
+                                f"改进后子任务质量评估: {evaluation.score}/10，已达到标准 {quality_threshold}。",
+                            )
+                            return current_result
+                    else:
+                        logger.warning(f"Manus: 未能生成有效的改进计划")
+
+            # 如果max_retries=0，质量未达标但不进行重试
+            if max_retries == 0:
+                logger.warning(
+                    f"Manus: 子任务 {current_step_index} 质量未达标 ({evaluation.score}/{quality_threshold})，"
+                    f"但重试已禁用(max_retries=0)，将继续下一步骤"
+                )
+
+                # 添加系统消息
+                self.update_memory(
+                    "system",
+                    f"警告: 子任务质量未达标 ({evaluation.score}/{quality_threshold})，"
+                    f"但重试已禁用(max_retries=0)。将继续下一步骤。",
+                )
+
+                return current_result
+
+            # 启用重试机制 (只有当max_retries > 0时)
+            retry_count = 1  # 已经执行过一次改进，从1开始计数
+
+            # 重试循环
+            while retry_count <= max_retries:
+                # 使用改进计划或重试模板
+                if improvement_plan:
+                    # 使用生成的改进计划作为新的执行指令
+                    logger.info(
+                        f"Manus: 步骤 {current_step_index} 使用改进计划重试 ({retry_count}/{max_retries})"
+                    )
+                    retry_prompt = f"""
 根据上次执行的评估结果，需要改进当前步骤的质量，请按照以下改进计划执行：
 
 {improvement_plan}
@@ -578,37 +695,37 @@ class Manus(ToolCallAgent):
 
 这是第 {retry_count}/{max_retries} 次重试，请务必按照改进计划提高质量。
 """
-                        result = await super().run(retry_prompt)
-                    else:
-                        # 没有改进计划，使用标准重试模板
-                        # 准备问题列表
-                        issues_text = (
-                            "\n".join(
-                                [
-                                    f"- {issue.issue} ({issue.severity}): {issue.suggestion}"
-                                    for issue in evaluation.issues
-                                ]
-                            )
-                            if evaluation and evaluation.issues
-                            else "未提供具体问题"
+                    result = await super().run(retry_prompt)
+                else:
+                    # 没有改进计划，使用标准重试模板
+                    # 准备问题列表
+                    issues_text = (
+                        "\n".join(
+                            [
+                                f"- {issue.issue} ({issue.severity}): {issue.suggestion}"
+                                for issue in evaluation.issues
+                            ]
                         )
-
-                        # 使用模板格式化重试提示
-                        retry_prompt = self.SUBTASK_RETRY_TEMPLATE.format(
-                            score=evaluation.score if evaluation else "未知",
-                            threshold=quality_threshold,
-                            issues=issues_text,
-                            original_task=step_prompt,
-                            retry_count=retry_count,
-                            max_retries=max_retries,
-                        )
-
-                        # 执行重试
-                        result = await super().run(retry_prompt)
-
-                    logger.info(
-                        f"Manus: 步骤 {current_step_index} 第{retry_count}次重试执行完成"
+                        if evaluation and evaluation.issues
+                        else "未提供具体问题"
                     )
+
+                    # 使用模板格式化重试提示
+                    retry_prompt = self.SUBTASK_RETRY_TEMPLATE.format(
+                        score=evaluation.score if evaluation else "未知",
+                        threshold=quality_threshold,
+                        issues=issues_text,
+                        original_task=step_prompt,
+                        retry_count=retry_count,
+                        max_retries=max_retries,
+                    )
+
+                    # 执行重试
+                    result = await super().run(retry_prompt)
+
+                logger.info(
+                    f"Manus: 步骤 {current_step_index} 第{retry_count}次重试执行完成"
+                )
 
                 current_result = result
 
@@ -621,34 +738,22 @@ class Manus(ToolCallAgent):
                 )
 
                 # 打印评估结果
-                logger.info(f"Manus: 子任务评估分数: {evaluation.score}/10")
-
-                # 使用安全的方式检查task_complete属性
-                task_complete = False
-                if hasattr(evaluation, "metadata"):
-                    task_complete = evaluation.metadata.get("task_complete", False)
+                logger.info(f"Manus: 重试后子任务评估分数: {evaluation.score}/10")
 
                 if evaluation.score >= quality_threshold:
-                    logger.info(f"Manus: 子任务质量达标，继续下一步骤")
+                    logger.info(f"Manus: 重试后子任务质量达标，继续下一步骤")
 
                     # 添加系统消息，表示质量达标
                     self.update_memory(
                         "system",
-                        f"子任务质量评估: {evaluation.score}/10，已达到标准 {quality_threshold}。",
+                        f"重试后子任务质量评估: {evaluation.score}/10，已达到标准 {quality_threshold}。",
                     )
-
-                    # 安全检查task_complete
-                    if task_complete:
-                        self.update_memory(
-                            "system",
-                            "任务已实质完成，考虑使用terminate工具提前结束剩余步骤。",
-                        )
                     break
 
                 # 检查是否达到最大重试次数
                 if retry_count >= max_retries:
                     logger.warning(
-                        f"Manus: 子任务 {current_step_index} 达到最大重试次数，"
+                        f"Manus: 子任务 {current_step_index} 达到最大重试次数 {max_retries}，"
                         f"但质量仍未达标 ({evaluation.score}/{quality_threshold})，将继续下一步骤"
                     )
 
@@ -660,7 +765,7 @@ class Manus(ToolCallAgent):
                     )
                     break
 
-                # 未达标且未达到最大重试次数，准备重试
+                # 增加重试计数
                 retry_count += 1
 
                 # 添加系统消息，说明需要重试
@@ -670,14 +775,10 @@ class Manus(ToolCallAgent):
                     f"将进行第 {retry_count}/{max_retries} 次重试。",
                 )
 
-                # 如果有优化器，尝试使用优化器改进
+                # 尝试生成新的改进计划
                 if self.optimizer and self.enable_auto_improvement:
-                    logger.info(f"Manus: 尝试使用优化器为子任务生成改进计划...")
-                    max_iterations = self.max_improvement_iterations
-
-                    # 不要每次重试都生成新计划，只在第一次重试时生成
-                    if improvement_plan is None and retry_count <= max_iterations:
-                        # 生成改进计划
+                    if retry_count <= self.max_improvement_iterations:
+                        # 生成新的改进计划
                         improvement_plan = await self.optimizer.create_improvement_plan(
                             evaluation=evaluation,
                             original_task=step_prompt,
@@ -685,22 +786,12 @@ class Manus(ToolCallAgent):
                         )
 
                         if improvement_plan:
-                            logger.info(f"Manus: 成功生成子任务改进计划")
-
-                            # 添加系统消息，包含改进计划
-                            self.update_memory(
-                                "system",
-                                (
-                                    f"子任务改进计划:\n{improvement_plan[:500]}..."
-                                    if len(improvement_plan) > 500
-                                    else improvement_plan
-                                ),
-                            )
+                            logger.info(f"Manus: 成功生成子任务新改进计划")
                         else:
-                            logger.warning(f"Manus: 未能生成有效的改进计划")
+                            logger.warning(f"Manus: 未能生成有效的新改进计划")
 
             # 返回最终结果
-            return current_result or result
+            return current_result
         finally:
             self.is_executing_planned_task = False
             logger.debug(f"Manus: 完成计划步骤 {current_step_index}")  # 降低日志级别
